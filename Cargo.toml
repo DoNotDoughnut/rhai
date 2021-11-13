@@ -16,13 +16,15 @@ keywords = ["scripting", "scripting-engine", "scripting-language", "embedded"]
 categories = ["no-std", "embedded", "wasm", "parser-implementations"]
 
 [dependencies]
-smallvec = { version = "1.6", default-features = false, features = ["union"] }
+smallvec = { version = "1.6", default-features = false }
 num-traits = { version = "0.2", default-features = false }
 smartstring = { version = "0.2.7", default-features = false }
 rhai_codegen = { version = "1.1", path = "codegen", default-features = false }
 
 [features]
-default = ["num-traits/std"]
+default = ["std", "union"]
+std = ["num-traits/std"]
+union = ["smallvec/union"]      # SmallVec union feature requires Rust 1.49, and Repl.it is on 1.44
 unchecked = []                  # unchecked arithmetic
 sync = []                       # restrict to only types that implement Send + Sync
 no_position = []                # do not track position in the parser
