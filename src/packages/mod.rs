@@ -14,7 +14,6 @@ mod pkg_core;
 mod pkg_std;
 mod string_basic;
 mod string_more;
-mod time_basic;
 
 pub use arithmetic::ArithmeticPackage;
 #[cfg(not(feature = "no_index"))]
@@ -29,8 +28,6 @@ pub use pkg_core::CorePackage;
 pub use pkg_std::StandardPackage;
 pub use string_basic::BasicStringPackage;
 pub use string_more::MoreStringPackage;
-#[cfg(not(feature = "no_std"))]
-pub use time_basic::BasicTimePackage;
 
 /// Trait that all packages must implement.
 pub trait Package {

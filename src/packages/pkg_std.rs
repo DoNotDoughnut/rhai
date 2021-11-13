@@ -5,8 +5,6 @@ use super::map_basic::BasicMapPackage;
 use super::math_basic::BasicMathPackage;
 use super::pkg_core::CorePackage;
 use super::string_more::MoreStringPackage;
-#[cfg(not(feature = "no_std"))]
-use super::time_basic::BasicTimePackage;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -21,7 +19,5 @@ def_package!(crate:StandardPackage:"_Standard_ package containing all built-in f
     BasicArrayPackage::init(lib);
     #[cfg(not(feature = "no_object"))]
     BasicMapPackage::init(lib);
-    #[cfg(not(feature = "no_std"))]
-    BasicTimePackage::init(lib);
     MoreStringPackage::init(lib);
 });

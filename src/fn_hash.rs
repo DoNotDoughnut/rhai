@@ -48,7 +48,7 @@ impl BuildHasher for StraightHasherBuilder {
 /// Create an instance of the default hasher.
 #[inline(always)]
 #[must_use]
-pub fn get_hasher() -> ahash::AHasher {
+pub fn get_hasher() -> std::collections::hash_map::DefaultHasher {
     Default::default()
 }
 

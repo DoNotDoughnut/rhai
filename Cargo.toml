@@ -17,13 +17,12 @@ categories = ["no-std", "embedded", "wasm", "parser-implementations"]
 
 [dependencies]
 smallvec = { version = "1.6", default-features = false, features = ["union"] }
-ahash = { version = "0.7", default-features = false }
 num-traits = { version = "0.2", default-features = false }
 smartstring = { version = "0.2.7", default-features = false }
 rhai_codegen = { version = "1.1", path = "codegen", default-features = false }
 
 [features]
-default = ["ahash/std", "num-traits/std"]
+default = ["num-traits/std"]
 unchecked = []                  # unchecked arithmetic
 sync = []                       # restrict to only types that implement Send + Sync
 no_position = []                # do not track position in the parser
@@ -42,11 +41,7 @@ internals = []                  # expose internal data structures
 unicode-xid-ident = ["unicode-xid"] # allow Unicode Standard Annex #31 for identifiers.
 metadata = ["serde", "serde_json", "rhai_codegen/metadata", "smartstring/serde"] # enable exporting functions metadata
 
-no_std = ["no-std-compat", "num-traits/libm", "core-error", "libm", "ahash/compile-time-rng"]
-
-# compiling for WASM
-wasm-bindgen = ["instant/wasm-bindgen"]
-stdweb = ["instant/stdweb"]
+no_std = ["no-std-compat", "num-traits/libm", "core-error", "libm"]
 
 # internal feature flags - volatile
 no_smartstring = []             # do not use SmartString
@@ -96,12 +91,6 @@ version = "1.16"
 default-features = false
 features = ["maths"]
 optional = true
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-instant = { version = "0.1.10" } # WASM implementation of std::time::Instant
-
-[target.'cfg(target_arch = "wasm64")'.dependencies]
-instant = { version = "0.1.10" } # WASM implementation of std::time::Instant
 
 [package.metadata.docs.rs]
 features = ["metadata", "serde", "internals", "decimal"] # compiling for no-std
