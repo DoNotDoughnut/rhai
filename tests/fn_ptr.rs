@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, INT};
+use rhai::{Engine, EvalAltResult, FnPtr, INT};
 
 #[test]
 fn test_fn_ptr() -> Result<(), Box<EvalAltResult>> {
@@ -108,6 +108,46 @@ fn test_fn_ptr_curry() -> Result<(), Box<EvalAltResult>> {
         )?,
         42
     );
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(feature = "no_function"))]
+fn test_fn_ptr_call() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    let ast = engine.compile("private fn foo(x, y) { len(x) + y }")?;
+
+    let mut fn_ptr = FnPtr::new("foo")?;
+    fn_ptr.set_curry(vec!["abc".into()]);
+    let result: INT = fn_ptr.call(&engine, &ast, (39 as INT,))?;
+
+    assert_eq!(result, 42);
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(feature = "no_closure"))]
+fn test_fn_ptr_make_closure() -> Result<(), Box<EvalAltResult>> {
+    let f = {
+        let engine = Engine::new();
+
+        let ast = engine.compile(
+            r#"
+                let test = "hello";
+                |x| test + x            // this creates a closure
+            "#,
+        )?;
+
+        let fn_ptr = engine.eval_ast::<FnPtr>(&ast)?;
+
+        move |x: INT| -> Result<String, _> { fn_ptr.call(&engine, &ast, (x,)) }
+    };
+
+    // 'f' captures: the Engine, the AST, and the closure
+    assert_eq!(f(42)?, "hello42");
 
     Ok(())
 }

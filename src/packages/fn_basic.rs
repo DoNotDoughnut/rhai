@@ -90,11 +90,13 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
     .map(|&s| s.into())
     .collect();
 
-    let mut list = Array::new();
-
-    ctx.iter_namespaces()
-        .flat_map(|m| m.iter_script_fn())
-        .for_each(|(_, _, _, _, f)| list.push(make_metadata(&dict, None, f).into()));
+    let mut _list = ctx.iter_namespaces().flat_map(Module::iter_script_fn).fold(
+        Array::new(),
+        |mut list, (_, _, _, _, f)| {
+            list.push(make_metadata(&dict, None, f).into());
+            list
+        },
+    );
 
     #[cfg(not(feature = "no_module"))]
     {
@@ -112,7 +114,7 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
                 let ns = format!(
                     "{}{}{}",
                     namespace,
-                    crate::token::Token::DoubleColon.literal_syntax(),
+                    crate::tokenizer::Token::DoubleColon.literal_syntax(),
                     ns
                 );
                 scan_module(list, dict, ns.into(), m.as_ref())
@@ -120,8 +122,8 @@ fn collect_fn_metadata(ctx: NativeCallContext) -> crate::Array {
         }
 
         ctx.iter_imports_raw()
-            .for_each(|(ns, m)| scan_module(&mut list, &dict, ns.clone(), m.as_ref()));
+            .for_each(|(ns, m)| scan_module(&mut _list, &dict, ns.clone(), m.as_ref()));
     }
 
-    list
+    _list
 }

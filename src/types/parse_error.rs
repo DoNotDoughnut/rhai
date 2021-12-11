@@ -11,10 +11,6 @@ use std::prelude::v1::*;
 
 /// _(internals)_ Error encountered when tokenizing the script text.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 #[non_exhaustive]
 pub enum LexError {
@@ -168,6 +164,16 @@ pub enum ParseErrorType {
     /// Assignment to an inappropriate LHS (left-hand-side) expression.
     /// Wrapped value is the error message (if any).
     AssignmentToInvalidLHS(String),
+    /// A variable is not found.
+    ///
+    /// Only appears when strict variables mode is enabled.
+    VariableUndefined(String),
+    /// An imported module is not found.
+    ///
+    /// Only appears when strict variables mode is enabled.
+    ///
+    /// Never appears under the `no_module` feature.
+    ModuleUndefined(String),
     /// Expression exceeding the maximum levels of complexity.
     ///
     /// Never appears under the `unchecked` feature.
@@ -214,7 +220,7 @@ impl fmt::Display for ParseErrorType {
             },
 
             Self::FnDuplicatedDefinition(s, n) => {
-                write!(f, "Function '{}' with ", s)?;
+                write!(f, "Function {} with ", s)?;
                 match n {
                     0 => f.write_str("no parameters already exists"),
                     1 => f.write_str("1 parameter already exists"),
@@ -223,14 +229,17 @@ impl fmt::Display for ParseErrorType {
             }
             Self::FnMissingBody(s) => match s.as_str() {
                 "" => f.write_str("Expecting body statement block for anonymous function"),
-                s => write!(f, "Expecting body statement block for function '{}'", s)
+                s => write!(f, "Expecting body statement block for function {}", s)
             },
-            Self::FnMissingParams(s) => write!(f, "Expecting parameters for function '{}'", s),
-            Self::FnDuplicatedParam(s, arg) => write!(f, "Duplicated parameter '{}' for function '{}'", arg, s),
+            Self::FnMissingParams(s) => write!(f, "Expecting parameters for function {}", s),
+            Self::FnDuplicatedParam(s, arg) => write!(f, "Duplicated parameter {} for function {}", arg, s),
 
-            Self::DuplicatedProperty(s) => write!(f, "Duplicated property '{}' for object map literal", s),
+            Self::DuplicatedProperty(s) => write!(f, "Duplicated property for object map literal: {}", s),
             Self::DuplicatedSwitchCase => f.write_str("Duplicated switch case"),
-            Self::DuplicatedVariable(s) => write!(f, "Duplicated variable name '{}'", s),
+            Self::DuplicatedVariable(s) => write!(f, "Duplicated variable name: {}", s),
+
+            Self::VariableUndefined(s) => write!(f, "Undefined variable: {}", s),
+            Self::ModuleUndefined(s) => write!(f, "Undefined module: {}", s),
 
             Self::MismatchedType(r, a) => write!(f, "Expecting {}, not {}", r, a),
             Self::ExprExpected(s) => write!(f, "Expecting {} expression", s),
@@ -241,7 +250,7 @@ impl fmt::Display for ParseErrorType {
 
             Self::AssignmentToConstant(s) => match s.as_str() {
                 "" => f.write_str("Cannot assign to a constant value"),
-                s => write!(f, "Cannot assign to constant '{}'", s)
+                s => write!(f, "Cannot assign to constant {}", s)
             },
             Self::AssignmentToInvalidLHS(s) => match s.as_str() {
                 "" => f.write_str("Expression cannot be assigned to"),

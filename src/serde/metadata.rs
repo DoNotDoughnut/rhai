@@ -46,34 +46,28 @@ impl From<crate::FnAccess> for FnAccess {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FnParam {
-    pub name: String,
+    pub name: Box<str>,
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub typ: Option<String>,
+    pub typ: Option<Box<str>>,
 }
 
 impl PartialOrd for FnParam {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(
-            match self
-                .name
-                .partial_cmp(&other.name)
-                .expect("String::partial_cmp should succeed")
-            {
-                Ordering::Less => Ordering::Less,
-                Ordering::Greater => Ordering::Greater,
-                Ordering::Equal => match (self.typ.is_none(), other.typ.is_none()) {
-                    (true, true) => Ordering::Equal,
-                    (true, false) => Ordering::Greater,
-                    (false, true) => Ordering::Less,
-                    (false, false) => self
-                        .typ
-                        .as_ref()
-                        .expect("`typ` is not `None`")
-                        .partial_cmp(other.typ.as_ref().expect("`typ` is not `None`"))
-                        .expect("String::partial_cmp should succeed"),
-                },
+        Some(match self.name.partial_cmp(&other.name).expect("succeed") {
+            Ordering::Less => Ordering::Less,
+            Ordering::Greater => Ordering::Greater,
+            Ordering::Equal => match (self.typ.is_none(), other.typ.is_none()) {
+                (true, true) => Ordering::Equal,
+                (true, false) => Ordering::Greater,
+                (false, true) => Ordering::Less,
+                (false, false) => self
+                    .typ
+                    .as_ref()
+                    .expect("`Some`")
+                    .partial_cmp(other.typ.as_ref().expect("`Some`"))
+                    .expect("succeed"),
             },
-        )
+        })
     }
 }
 
@@ -98,10 +92,10 @@ struct FnMetadata {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub params: Vec<FnParam>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub return_type: Option<String>,
+    pub return_type: Option<Box<str>>,
     pub signature: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub doc_comments: Vec<String>,
+    pub doc_comments: Vec<Box<str>>,
 }
 
 impl PartialOrd for FnMetadata {
@@ -142,17 +136,17 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
                     let mut seg = s.splitn(2, ':');
                     let name = seg
                         .next()
-                        .map(|s| s.trim().to_string())
-                        .unwrap_or_else(|| "_".to_string());
-                    let typ = seg.next().map(|s| s.trim().to_string());
+                        .map(|s| s.trim().into())
+                        .unwrap_or_else(|| "_".into());
+                    let typ = seg.next().map(|s| s.trim().into());
                     FnParam { name, typ }
                 })
                 .collect(),
             return_type: info
                 .param_names
                 .last()
-                .map(|s| s.to_string())
-                .or_else(|| Some("()".to_string())),
+                .map(|s| s.as_str().into())
+                .or_else(|| Some("()".into())),
             signature: info.gen_signature(),
             doc_comments: if info.func.is_script() {
                 #[cfg(feature = "no_function")]
@@ -165,7 +159,8 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
                         .get_script_fn_def()
                         .expect("scripted function")
                         .comments
-                        .to_vec()
+                        .as_ref()
+                        .map_or_else(|| Vec::new(), |v| v.to_vec())
                 }
             } else {
                 Vec::new()
@@ -186,14 +181,14 @@ impl From<crate::ast::ScriptFnMetadata<'_>> for FnMetadata {
             params: info
                 .params
                 .iter()
-                .map(|s| FnParam {
-                    name: s.to_string(),
-                    typ: Some("Dynamic".to_string()),
+                .map(|&s| FnParam {
+                    name: s.into(),
+                    typ: Some("Dynamic".into()),
                 })
                 .collect(),
-            return_type: Some("Dynamic".to_string()),
+            return_type: Some("Dynamic".into()),
             signature: info.to_string(),
-            doc_comments: info.comments.iter().map(|s| s.to_string()).collect(),
+            doc_comments: info.comments.iter().map(|&s| s.into()).collect(),
         }
     }
 }
@@ -277,12 +272,13 @@ impl Engine {
     }
 
     /// Generate a list of all functions in JSON format.
-    /// Available only under the `metadata` feature.
+    /// Exported under the `metadata` feature only.
     ///
     /// Functions from the following sources are included:
     /// 1) Functions registered into the global namespace
     /// 2) Functions in static modules
     /// 3) Functions in global modules (optional)
+    #[inline(always)]
     pub fn gen_fn_metadata_to_json(&self, include_global: bool) -> serde_json::Result<String> {
         self.gen_fn_metadata_with_ast_to_json(&AST::empty(), include_global)
     }

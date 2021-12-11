@@ -4,6 +4,7 @@ use crate::{Module, Shared};
 
 pub(crate) mod arithmetic;
 mod array_basic;
+mod blob_basic;
 mod fn_basic;
 mod iter_basic;
 mod lang_core;
@@ -18,6 +19,8 @@ mod string_more;
 pub use arithmetic::ArithmeticPackage;
 #[cfg(not(feature = "no_index"))]
 pub use array_basic::BasicArrayPackage;
+#[cfg(not(feature = "no_index"))]
+pub use blob_basic::BasicBlobPackage;
 pub use fn_basic::BasicFnPackage;
 pub use iter_basic::BasicIteratorPackage;
 pub use logic::LogicPackage;

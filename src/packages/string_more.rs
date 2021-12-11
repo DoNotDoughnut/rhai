@@ -175,7 +175,7 @@ mod string_functions {
     #[rhai_fn(name = "to_upper")]
     pub fn to_upper_char(character: char) -> char {
         let mut stream = character.to_uppercase();
-        let ch = stream.next().expect("at least one character");
+        let ch = stream.next().expect("not empty");
         if stream.next().is_some() {
             character
         } else {
@@ -189,9 +189,7 @@ mod string_functions {
     #[rhai_fn(name = "to_lower")]
     pub fn to_lower_char(character: char) -> char {
         let mut stream = character.to_lowercase();
-        let ch = stream
-            .next()
-            .expect("there should be at least one character");
+        let ch = stream.next().expect("not empty");
         if stream.next().is_some() {
             character
         } else {
@@ -471,7 +469,6 @@ mod string_functions {
         if len <= 0 {
             return Ok(());
         }
-
         let _ctx = ctx;
 
         // Check if string will be over max size limit
@@ -516,7 +513,6 @@ mod string_functions {
         if len <= 0 {
             return Ok(());
         }
-
         let _ctx = ctx;
 
         // Check if string will be over max size limit

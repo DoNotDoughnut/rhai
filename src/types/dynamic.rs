@@ -1,6 +1,6 @@
 //! Helper module which defines the [`Any`] trait to to allow dynamic value handling.
 
-use crate::fn_native::SendSync;
+use crate::func::native::SendSync;
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
 use crate::{FnPtr, ImmutableString, INT};
 #[cfg(feature = "no_std")]
@@ -20,7 +20,7 @@ use crate::{ast::FloatWrapper, FLOAT};
 use rust_decimal::Decimal;
 
 #[cfg(not(feature = "no_index"))]
-use crate::Array;
+use crate::{Array, Blob};
 
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
@@ -29,7 +29,7 @@ use crate::Map;
 const CHECKED: &str = "data type was checked";
 
 mod private {
-    use crate::fn_native::SendSync;
+    use crate::func::native::SendSync;
     use std::any::Any;
 
     /// A sealed trait that prevents other crates from implementing [`Variant`].
@@ -191,6 +191,11 @@ pub enum Union {
     /// Not available under `no_index`.
     #[cfg(not(feature = "no_index"))]
     Array(Box<Array>, Tag, AccessMode),
+    /// An blob (byte array).
+    ///
+    /// Not available under `no_index`.
+    #[cfg(not(feature = "no_index"))]
+    Blob(Box<Blob>, Tag, AccessMode),
     /// An object map value.
     ///
     /// Not available under `no_object`.
@@ -215,10 +220,6 @@ pub enum Union {
 ///
 /// This type provides transparent interoperability between normal [`Dynamic`] and shared
 /// [`Dynamic`] values.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug)]
 pub struct DynamicReadLock<'d, T: Clone>(DynamicReadLockInner<'d, T>);
 
@@ -256,10 +257,6 @@ impl<'d, T: Any + Clone> Deref for DynamicReadLock<'d, T> {
 ///
 /// This type provides transparent interoperability between normal [`Dynamic`] and shared
 /// [`Dynamic`] values.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug)]
 pub struct DynamicWriteLock<'d, T: Clone>(DynamicWriteLockInner<'d, T>);
 
@@ -273,7 +270,7 @@ enum DynamicWriteLockInner<'d, T: Clone> {
     ///
     /// Not available under `no_closure`.
     #[cfg(not(feature = "no_closure"))]
-    Guard(crate::fn_native::LockGuard<'d, Dynamic>),
+    Guard(crate::func::native::LockGuard<'d, Dynamic>),
 }
 
 impl<'d, T: Any + Clone> Deref for DynamicWriteLock<'d, T> {
@@ -318,7 +315,7 @@ impl Dynamic {
             #[cfg(feature = "decimal")]
             Union::Decimal(_, tag, _) => tag,
             #[cfg(not(feature = "no_index"))]
-            Union::Array(_, tag, _) => tag,
+            Union::Array(_, tag, _) | Union::Blob(_, tag, _) => tag,
             #[cfg(not(feature = "no_object"))]
             Union::Map(_, tag, _) => tag,
             #[cfg(not(feature = "no_closure"))]
@@ -341,7 +338,7 @@ impl Dynamic {
             #[cfg(feature = "decimal")]
             Union::Decimal(_, ref mut tag, _) => *tag = value,
             #[cfg(not(feature = "no_index"))]
-            Union::Array(_, ref mut tag, _) => *tag = value,
+            Union::Array(_, ref mut tag, _) | Union::Blob(_, ref mut tag, _) => *tag = value,
             #[cfg(not(feature = "no_object"))]
             Union::Map(_, ref mut tag, _) => *tag = value,
             #[cfg(not(feature = "no_closure"))]
@@ -401,6 +398,8 @@ impl Dynamic {
             Union::Decimal(_, _, _) => TypeId::of::<Decimal>(),
             #[cfg(not(feature = "no_index"))]
             Union::Array(_, _, _) => TypeId::of::<Array>(),
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(_, _, _) => TypeId::of::<Blob>(),
             #[cfg(not(feature = "no_object"))]
             Union::Map(_, _, _) => TypeId::of::<Map>(),
             Union::FnPtr(_, _, _) => TypeId::of::<FnPtr>(),
@@ -436,6 +435,8 @@ impl Dynamic {
             Union::Decimal(_, _, _) => "decimal",
             #[cfg(not(feature = "no_index"))]
             Union::Array(_, _, _) => "array",
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(_, _, _) => "blob",
             #[cfg(not(feature = "no_object"))]
             Union::Map(_, _, _) => "map",
             Union::FnPtr(_, _, _) => "Fn",
@@ -476,6 +477,8 @@ impl Hash for Dynamic {
             Union::Decimal(ref d, _, _) => d.hash(state),
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref a, _, _) => a.as_ref().hash(state),
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(ref a, _, _) => a.as_ref().hash(state),
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref m, _, _) => m.as_ref().hash(state),
             Union::FnPtr(ref f, _, _) => f.hash(state),
@@ -561,6 +564,10 @@ pub(crate) fn map_std_type_name(name: &str) -> &str {
     if name == type_name::<Array>() {
         return "array";
     }
+    #[cfg(not(feature = "no_index"))]
+    if name == type_name::<Blob>() {
+        return "blob";
+    }
     #[cfg(not(feature = "no_object"))]
     if name == type_name::<Map>() {
         return "map";
@@ -583,6 +590,8 @@ impl fmt::Display for Dynamic {
             Union::Decimal(ref value, _, _) => fmt::Display::fmt(value, f),
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref value, _, _) => fmt::Debug::fmt(value, f),
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(ref value, _, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref value, _, _) => {
                 f.write_str("#")?;
@@ -661,6 +670,8 @@ impl fmt::Debug for Dynamic {
             Union::Decimal(ref value, _, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref value, _, _) => fmt::Debug::fmt(value, f),
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(ref value, _, _) => fmt::Debug::fmt(value, f),
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref value, _, _) => {
                 f.write_str("#")?;
@@ -748,6 +759,8 @@ impl Clone for Dynamic {
             }
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref value, tag, _) => Self(Union::Array(value.clone(), tag, ReadWrite)),
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(ref value, tag, _) => Self(Union::Blob(value.clone(), tag, ReadWrite)),
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref value, tag, _) => Self(Union::Map(value.clone(), tag, ReadWrite)),
             Union::FnPtr(ref value, tag, _) => Self(Union::FnPtr(value.clone(), tag, ReadWrite)),
@@ -927,7 +940,7 @@ impl Dynamic {
             #[cfg(feature = "decimal")]
             Union::Decimal(_, _, access) => access,
             #[cfg(not(feature = "no_index"))]
-            Union::Array(_, _, access) => access,
+            Union::Array(_, _, access) | Union::Blob(_, _, access) => access,
             #[cfg(not(feature = "no_object"))]
             Union::Map(_, _, access) => access,
             #[cfg(not(feature = "no_closure"))]
@@ -956,6 +969,8 @@ impl Dynamic {
                     v.set_access_mode(typ);
                 });
             }
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(_, _, ref mut access) => *access = typ,
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref mut m, _, ref mut access) => {
                 *access = typ;
@@ -1117,6 +1132,13 @@ impl Dynamic {
                 Err(value) => value,
             };
         }
+        #[cfg(not(feature = "no_index"))]
+        {
+            value = match unsafe_try_cast::<_, Blob>(value) {
+                Ok(blob) => return Self(Union::Blob(Box::new(blob), DEFAULT_TAG_VALUE, ReadWrite)),
+                Err(value) => value,
+            };
+        }
 
         #[cfg(not(feature = "no_object"))]
         {
@@ -1270,6 +1292,14 @@ impl Dynamic {
             };
         }
 
+        #[cfg(not(feature = "no_index"))]
+        if TypeId::of::<T>() == TypeId::of::<Blob>() {
+            return match self.0 {
+                Union::Blob(value, _, _) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
+                _ => None,
+            };
+        }
+
         #[cfg(not(feature = "no_object"))]
         if TypeId::of::<T>() == TypeId::of::<Map>() {
             return match self.0 {
@@ -1407,7 +1437,7 @@ impl Dynamic {
     pub fn flatten(self) -> Self {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
-            Union::Shared(cell, _, _) => crate::fn_native::shared_try_take(cell).map_or_else(
+            Union::Shared(cell, _, _) => crate::func::native::shared_try_take(cell).map_or_else(
                 #[cfg(not(feature = "sync"))]
                 |cell| cell.borrow().clone(),
                 #[cfg(feature = "sync")]
@@ -1432,7 +1462,7 @@ impl Dynamic {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(_, _, _) => match std::mem::take(self).0 {
                 Union::Shared(cell, _, _) => {
-                    *self = crate::fn_native::shared_try_take(cell).map_or_else(
+                    *self = crate::func::native::shared_try_take(cell).map_or_else(
                         #[cfg(not(feature = "sync"))]
                         |cell| cell.borrow().clone(),
                         #[cfg(feature = "sync")]
@@ -1525,7 +1555,7 @@ impl Dynamic {
         match self.0 {
             #[cfg(not(feature = "no_closure"))]
             Union::Shared(ref cell, _, _) => {
-                let value = crate::fn_native::shared_write_lock(cell);
+                let value = crate::func::native::shared_write_lock(cell);
 
                 if (*value).type_id() != TypeId::of::<T>()
                     && TypeId::of::<Dynamic>() != TypeId::of::<T>()
@@ -1592,6 +1622,13 @@ impl Dynamic {
         if TypeId::of::<T>() == TypeId::of::<Array>() {
             return match self.0 {
                 Union::Array(ref value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
+                _ => None,
+            };
+        }
+        #[cfg(not(feature = "no_index"))]
+        if TypeId::of::<T>() == TypeId::of::<Blob>() {
+            return match self.0 {
+                Union::Blob(ref value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
@@ -1685,6 +1722,13 @@ impl Dynamic {
                 _ => None,
             };
         }
+        #[cfg(not(feature = "no_index"))]
+        if TypeId::of::<T>() == TypeId::of::<Blob>() {
+            return match self.0 {
+                Union::Blob(ref mut value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
+                _ => None,
+            };
+        }
         #[cfg(not(feature = "no_object"))]
         if TypeId::of::<T>() == TypeId::of::<Map>() {
             return match self.0 {
@@ -1717,7 +1761,7 @@ impl Dynamic {
             _ => None,
         }
     }
-    /// Cast the [`Dynamic`] as a unit `()` and return it.
+    /// Cast the [`Dynamic`] as a unit `()`.
     /// Returns the name of the actual type if the cast fails.
     #[inline]
     pub fn as_unit(&self) -> Result<(), &'static str> {
@@ -1728,7 +1772,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Cast the [`Dynamic`] as the system integer type [`INT`] and return it.
+    /// Cast the [`Dynamic`] as the system integer type [`INT`].
     /// Returns the name of the actual type if the cast fails.
     #[inline]
     pub fn as_int(&self) -> Result<INT, &'static str> {
@@ -1739,7 +1783,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Cast the [`Dynamic`] as the system floating-point type [`FLOAT`] and return it.
+    /// Cast the [`Dynamic`] as the system floating-point type [`FLOAT`].
     /// Returns the name of the actual type if the cast fails.
     ///
     /// Not available under `no_float`.
@@ -1753,7 +1797,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// _(decimal)_ Cast the [`Dynamic`] as a [`Decimal`](https://docs.rs/rust_decimal) and return it.
+    /// _(decimal)_ Cast the [`Dynamic`] as a [`Decimal`](https://docs.rs/rust_decimal).
     /// Returns the name of the actual type if the cast fails.
     ///
     /// Exported under the `decimal` feature only.
@@ -1767,7 +1811,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Cast the [`Dynamic`] as a [`bool`] and return it.
+    /// Cast the [`Dynamic`] as a [`bool`].
     /// Returns the name of the actual type if the cast fails.
     #[inline]
     pub fn as_bool(&self) -> Result<bool, &'static str> {
@@ -1778,7 +1822,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Cast the [`Dynamic`] as a [`char`] and return it.
+    /// Cast the [`Dynamic`] as a [`char`].
     /// Returns the name of the actual type if the cast fails.
     #[inline]
     pub fn as_char(&self) -> Result<char, &'static str> {
@@ -1789,7 +1833,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Cast the [`Dynamic`] as an [`ImmutableString`] and return it as a string slice.
+    /// Cast the [`Dynamic`] as a string slice.
     /// Returns the name of the actual type if the cast fails.
     ///
     /// # Panics
@@ -1804,7 +1848,7 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Convert the [`Dynamic`] into a [`String`] and return it.
+    /// Convert the [`Dynamic`] into a [`String`].
     /// If there are other references to the same string, a cloned copy is returned.
     /// Returns the name of the actual type if the cast fails.
     #[inline]
@@ -1812,7 +1856,7 @@ impl Dynamic {
         self.into_immutable_string()
             .map(ImmutableString::into_owned)
     }
-    /// Convert the [`Dynamic`] into an [`ImmutableString`] and return it.
+    /// Convert the [`Dynamic`] into an [`ImmutableString`].
     /// Returns the name of the actual type if the cast fails.
     #[inline]
     pub fn into_immutable_string(self) -> Result<ImmutableString, &'static str> {
@@ -1938,6 +1982,114 @@ impl<T: Variant + Clone> std::iter::FromIterator<T> for Dynamic {
             DEFAULT_TAG_VALUE,
             ReadWrite,
         ))
+    }
+}
+#[cfg(not(feature = "no_index"))]
+impl Dynamic {
+    /// Convert the [`Dynamic`] into an [`Array`].
+    /// Returns the name of the actual type if the cast fails.
+    #[inline(always)]
+    pub fn into_array(self) -> Result<Array, &'static str> {
+        match self.0 {
+            Union::Array(a, _, _) => Ok(*a),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(cell, _, _) => {
+                #[cfg(not(feature = "sync"))]
+                let value = cell.borrow();
+                #[cfg(feature = "sync")]
+                let value = cell.read().unwrap();
+
+                match value.0 {
+                    Union::Array(ref a, _, _) => Ok(a.as_ref().clone()),
+                    _ => Err((*value).type_name()),
+                }
+            }
+            _ => Err(self.type_name()),
+        }
+    }
+    /// Convert the [`Dynamic`] into a [`Vec`].
+    /// Returns the name of the actual type if any cast fails.
+    #[inline(always)]
+    pub fn into_typed_array<T: Variant + Clone>(self) -> Result<Vec<T>, &'static str> {
+        match self.0 {
+            Union::Array(a, _, _) => a
+                .into_iter()
+                .map(|v| {
+                    #[cfg(not(feature = "no_closure"))]
+                    let typ = if v.is_shared() {
+                        // Avoid panics/deadlocks with shared values
+                        "<shared>"
+                    } else {
+                        v.type_name()
+                    };
+                    #[cfg(feature = "no_closure")]
+                    let typ = v.type_name();
+
+                    v.try_cast::<T>().ok_or_else(|| typ)
+                })
+                .collect(),
+            Union::Blob(_, _, _) if TypeId::of::<T>() == TypeId::of::<u8>() => {
+                Ok(self.cast::<Vec<T>>())
+            }
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(cell, _, _) => {
+                #[cfg(not(feature = "sync"))]
+                let value = cell.borrow();
+                #[cfg(feature = "sync")]
+                let value = cell.read().unwrap();
+
+                match value.0 {
+                    Union::Array(ref a, _, _) => {
+                        a.iter()
+                            .map(|v| {
+                                #[cfg(not(feature = "no_closure"))]
+                                let typ = if v.is_shared() {
+                                    // Avoid panics/deadlocks with shared values
+                                    "<shared>"
+                                } else {
+                                    v.type_name()
+                                };
+                                #[cfg(feature = "no_closure")]
+                                let typ = v.type_name();
+
+                                v.read_lock::<T>().ok_or_else(|| typ).map(|v| v.clone())
+                            })
+                            .collect()
+                    }
+                    _ => Err((*value).type_name()),
+                }
+            }
+            _ => Err(self.type_name()),
+        }
+    }
+}
+#[cfg(not(feature = "no_index"))]
+impl Dynamic {
+    /// Create a [`Dynamic`] from a [`Vec<u8>`].
+    #[inline(always)]
+    pub fn from_blob(blob: Blob) -> Self {
+        Self(Union::Blob(Box::new(blob), DEFAULT_TAG_VALUE, ReadWrite))
+    }
+    /// Convert the [`Dynamic`] into a [`Vec<u8>`].
+    /// Returns the name of the actual type if the cast fails.
+    #[inline(always)]
+    pub fn into_blob(self) -> Result<Blob, &'static str> {
+        match self.0 {
+            Union::Blob(a, _, _) => Ok(*a),
+            #[cfg(not(feature = "no_closure"))]
+            Union::Shared(cell, _, _) => {
+                #[cfg(not(feature = "sync"))]
+                let value = cell.borrow();
+                #[cfg(feature = "sync")]
+                let value = cell.read().unwrap();
+
+                match value.0 {
+                    Union::Blob(ref a, _, _) => Ok(a.as_ref().clone()),
+                    _ => Err((*value).type_name()),
+                }
+            }
+            _ => Err(self.type_name()),
+        }
     }
 }
 #[cfg(not(feature = "no_object"))]

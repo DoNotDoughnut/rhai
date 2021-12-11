@@ -6,10 +6,7 @@ use crate::{def_package, Position, INT};
 use std::prelude::v1::*;
 
 #[cfg(not(feature = "no_float"))]
-use crate::FLOAT;
-
-#[cfg(not(feature = "no_float"))]
-use crate::error::EvalAltResult;
+use crate::{EvalAltResult, FLOAT};
 
 #[cfg(feature = "no_std")]
 #[cfg(not(feature = "no_float"))]

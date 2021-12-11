@@ -1,7 +1,9 @@
 //! Module that defines the [`Scope`] type representing a function call-stack scope.
 
-use crate::dynamic::{AccessMode, Variant};
+use super::dynamic::{AccessMode, Variant};
 use crate::{Dynamic, Identifier, StaticVec};
+use smallvec::SmallVec;
+use std::iter::FromIterator;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{borrow::Cow, iter::Extend};
@@ -9,13 +11,13 @@ use std::{borrow::Cow, iter::Extend};
 /// Keep a number of entries inline (since [`Dynamic`] is usually small enough).
 const SCOPE_ENTRIES_INLINED: usize = 8;
 
-/// Type containing information about the current scope.
-/// Useful for keeping state between [`Engine`][crate::Engine] evaluation runs.
+/// Type containing information about the current scope. Useful for keeping state between
+/// [`Engine`][crate::Engine] evaluation runs.
 ///
 /// # Thread Safety
 ///
-/// Currently, [`Scope`] is neither [`Send`] nor [`Sync`].
-/// Turn on the `sync` feature to make it [`Send`] `+` [`Sync`].
+/// Currently, [`Scope`] is neither [`Send`] nor [`Sync`]. Turn on the `sync` feature to make it
+/// [`Send`] `+` [`Sync`].
 ///
 /// # Example
 ///
@@ -38,25 +40,25 @@ const SCOPE_ENTRIES_INLINED: usize = 8;
 /// # }
 /// ```
 ///
-/// When searching for entries, newly-added entries are found before similarly-named but older entries,
-/// allowing for automatic _shadowing_.
+/// When searching for entries, newly-added entries are found before similarly-named but older
+/// entries, allowing for automatic _shadowing_.
 //
 // # Implementation Notes
 //
-// [`Scope`] is implemented as two [`Vec`]'s of exactly the same length.  Variables data (name, type, etc.)
-// is manually split into two equal-length arrays.  That's because variable names take up the most space,
-// with [`Cow<str>`][Cow] being four words long, but in the vast majority of cases the name is NOT used to
-// look up a variable.  Variable lookup is usually via direct indexing, by-passing the name altogether.
+// [`Scope`] is implemented as two [`Vec`]'s of exactly the same length.  Variables data (name,
+// type, etc.) is manually split into two equal-length arrays.  That's because variable names take
+// up the most space, with [`Cow<str>`][Cow] being four words long, but in the vast majority of
+// cases the name is NOT used to look up a variable.  Variable lookup is usually via direct
+// indexing, by-passing the name altogether.
 //
-// Since [`Dynamic`] is reasonably small, packing it tightly improves cache locality when variables are accessed.
+// Since [`Dynamic`] is reasonably small, packing it tightly improves cache locality when variables
+// are accessed.
 #[derive(Debug, Clone, Hash, Default)]
 pub struct Scope<'a> {
     /// Current value of the entry.
-    values: smallvec::SmallVec<[Dynamic; SCOPE_ENTRIES_INLINED]>,
+    values: SmallVec<[Dynamic; SCOPE_ENTRIES_INLINED]>,
     /// (Name, aliases) of the entry.
-    names: smallvec::SmallVec<
-        [(Cow<'a, str>, Option<Box<StaticVec<Identifier>>>); SCOPE_ENTRIES_INLINED],
-    >,
+    names: SmallVec<[(Cow<'a, str>, Option<Box<StaticVec<Identifier>>>); SCOPE_ENTRIES_INLINED]>,
 }
 
 impl<'a> IntoIterator for Scope<'a> {
@@ -89,8 +91,11 @@ impl<'a> Scope<'a> {
     /// ```
     #[inline(always)]
     #[must_use]
-    pub fn new() -> Self {
-        Default::default()
+    pub const fn new() -> Self {
+        Self {
+            values: SmallVec::new_const(),
+            names: SmallVec::new_const(),
+        }
     }
     /// Empty the [`Scope`].
     ///
@@ -296,22 +301,21 @@ impl<'a> Scope<'a> {
     #[inline]
     #[must_use]
     pub fn contains(&self, name: &str) -> bool {
-        self.names
-            .iter()
-            .rev() // Always search a Scope in reverse order
-            .any(|(key, _)| name == key.as_ref())
+        self.names.iter().any(|(key, _)| name == key.as_ref())
     }
     /// Find an entry in the [`Scope`], starting from the last.
     #[inline]
     #[must_use]
     pub(crate) fn get_index(&self, name: &str) -> Option<(usize, AccessMode)> {
+        let len = self.len();
+
         self.names
             .iter()
             .rev() // Always search a Scope in reverse order
             .enumerate()
-            .find_map(|(index, (key, _))| {
+            .find_map(|(i, (key, _))| {
                 if name == key.as_ref() {
-                    let index = self.len() - 1 - index;
+                    let index = len - 1 - i;
                     Some((index, self.values[index].access_mode()))
                 } else {
                     None
@@ -333,16 +337,14 @@ impl<'a> Scope<'a> {
     #[inline]
     #[must_use]
     pub fn get_value<T: Variant + Clone>(&self, name: &str) -> Option<T> {
+        let len = self.len();
+
         self.names
             .iter()
             .rev()
             .enumerate()
             .find(|(_, (key, _))| name == key.as_ref())
-            .and_then(|(index, _)| {
-                self.values[self.len() - 1 - index]
-                    .flatten_clone()
-                    .try_cast()
-            })
+            .and_then(|(index, _)| self.values[len - 1 - index].flatten_clone().try_cast())
     }
     /// Check if the named entry in the [`Scope`] is constant.
     ///
@@ -404,7 +406,7 @@ impl<'a> Scope<'a> {
                 self.push(name, value);
             }
             Some((index, AccessMode::ReadWrite)) => {
-                let value_ref = self.values.get_mut(index).expect("index is valid");
+                let value_ref = self.values.get_mut(index).expect("valid index");
                 *value_ref = Dynamic::from(value);
             }
         }
@@ -444,7 +446,7 @@ impl<'a> Scope<'a> {
             }
             Some((_, AccessMode::ReadOnly)) => panic!("variable {} is constant", name.as_ref()),
             Some((index, AccessMode::ReadWrite)) => {
-                let value_ref = self.values.get_mut(index).expect("index is valid");
+                let value_ref = self.values.get_mut(index).expect("valid index");
                 *value_ref = Dynamic::from(value);
             }
         }
@@ -490,9 +492,9 @@ impl<'a> Scope<'a> {
     #[inline]
     #[must_use]
     pub(crate) fn get_mut_by_index(&mut self, index: usize) -> &mut Dynamic {
-        self.values.get_mut(index).expect("index is out of bounds")
+        self.values.get_mut(index).expect("valid index")
     }
-    /// Update the access type of an entry in the [`Scope`].
+    /// Add an alias to an entry in the [`Scope`].
     ///
     /// # Panics
     ///
@@ -500,10 +502,10 @@ impl<'a> Scope<'a> {
     #[cfg(not(feature = "no_module"))]
     #[inline]
     pub(crate) fn add_entry_alias(&mut self, index: usize, alias: Identifier) -> &mut Self {
-        let (_, aliases) = self.names.get_mut(index).expect("index is out of bounds");
+        let (_, aliases) = self.names.get_mut(index).expect("valid index");
         match aliases {
             None => {
-                let mut list = StaticVec::new();
+                let mut list = StaticVec::new_const();
                 list.push(alias);
                 *aliases = Some(list.into());
             }
@@ -516,23 +518,19 @@ impl<'a> Scope<'a> {
     /// Shadowed variables are omitted in the copy.
     #[inline]
     #[must_use]
-    pub(crate) fn clone_visible(&self) -> Self {
-        let mut entries = Self::new();
+    pub fn clone_visible(&self) -> Self {
+        let len = self.len();
 
-        self.names
-            .iter()
-            .rev()
-            .enumerate()
-            .for_each(|(index, (name, alias))| {
+        self.names.iter().rev().enumerate().fold(
+            Self::new(),
+            |mut entries, (index, (name, alias))| {
                 if !entries.names.iter().any(|(key, _)| key == name) {
                     entries.names.push((name.clone(), alias.clone()));
-                    entries
-                        .values
-                        .push(self.values[self.len() - 1 - index].clone());
+                    entries.values.push(self.values[len - 1 - index].clone());
                 }
-            });
-
-        entries
+                entries
+            },
+        )
     }
     /// Get an iterator to entries in the [`Scope`].
     #[inline]
@@ -586,14 +584,59 @@ impl<'a> Scope<'a> {
             .zip(self.values.iter())
             .map(|((name, _), value)| (name.as_ref(), value.is_read_only(), value))
     }
+    /// Remove a range of entries within the [`Scope`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the range is out of bounds.
+    #[inline]
+    #[allow(dead_code)]
+    pub(crate) fn remove_range(&mut self, start: usize, len: usize) {
+        self.values.drain(start..start + len).for_each(|_| {});
+        self.names.drain(start..start + len).for_each(|_| {});
+    }
 }
 
 impl<'a, K: Into<Cow<'a, str>>> Extend<(K, Dynamic)> for Scope<'a> {
     #[inline]
     fn extend<T: IntoIterator<Item = (K, Dynamic)>>(&mut self, iter: T) {
         iter.into_iter().for_each(|(name, value)| {
-            self.names.push((name.into(), None));
-            self.values.push(value);
+            self.push_dynamic_value(name, AccessMode::ReadWrite, value);
         });
+    }
+}
+
+impl<'a, K: Into<Cow<'a, str>>> FromIterator<(K, Dynamic)> for Scope<'a> {
+    #[inline]
+    fn from_iter<T: IntoIterator<Item = (K, Dynamic)>>(iter: T) -> Self {
+        let mut scope = Self::new();
+        scope.extend(iter);
+        scope
+    }
+}
+
+impl<'a, K: Into<Cow<'a, str>>> Extend<(K, bool, Dynamic)> for Scope<'a> {
+    #[inline]
+    fn extend<T: IntoIterator<Item = (K, bool, Dynamic)>>(&mut self, iter: T) {
+        iter.into_iter().for_each(|(name, is_constant, value)| {
+            self.push_dynamic_value(
+                name,
+                if is_constant {
+                    AccessMode::ReadOnly
+                } else {
+                    AccessMode::ReadWrite
+                },
+                value,
+            );
+        });
+    }
+}
+
+impl<'a, K: Into<Cow<'a, str>>> FromIterator<(K, bool, Dynamic)> for Scope<'a> {
+    #[inline]
+    fn from_iter<T: IntoIterator<Item = (K, bool, Dynamic)>>(iter: T) -> Self {
+        let mut scope = Self::new();
+        scope.extend(iter);
+        scope
     }
 }

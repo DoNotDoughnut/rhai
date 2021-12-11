@@ -1,9 +1,5 @@
 #![cfg(not(feature = "no_index"))]
-use rhai::{Array, Engine, EvalAltResult, INT};
-
-fn convert_to_vec<T: Clone + 'static>(array: Array) -> Vec<T> {
-    array.into_iter().map(|v| v.clone_cast::<T>()).collect()
-}
+use rhai::{Array, Dynamic, Engine, EvalAltResult, INT};
 
 #[test]
 fn test_arrays() -> Result<(), Box<EvalAltResult>> {
@@ -27,30 +23,42 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
     assert!(engine.eval::<bool>("let y = [1, 2, 3]; 2 in y")?);
     assert_eq!(engine.eval::<INT>("let y = [1, 2, 3]; y += 4; y[3]")?, 4);
     assert_eq!(
-        convert_to_vec::<INT>(engine.eval("let y = [1, 2, 3]; y[1] += 4; y")?),
+        engine
+            .eval::<Dynamic>("let y = [1, 2, 3]; y[1] += 4; y")?
+            .into_typed_array::<INT>()?,
         [1, 6, 3]
     );
 
     #[cfg(not(feature = "no_object"))]
     {
         assert_eq!(
-            convert_to_vec::<INT>(engine.eval("let y = [1, 2, 3]; y.push(4); y")?),
+            engine
+                .eval::<Dynamic>("let y = [1, 2, 3]; y.push(4); y")?
+                .into_typed_array::<INT>()?,
             [1, 2, 3, 4]
         );
         assert_eq!(
-            convert_to_vec::<INT>(engine.eval("let y = [1, 2, 3]; y.insert(0, 4); y")?),
+            engine
+                .eval::<Dynamic>("let y = [1, 2, 3]; y.insert(0, 4); y")?
+                .into_typed_array::<INT>()?,
             [4, 1, 2, 3]
         );
         assert_eq!(
-            convert_to_vec::<INT>(engine.eval("let y = [1, 2, 3]; y.insert(999, 4); y")?),
+            engine
+                .eval::<Dynamic>("let y = [1, 2, 3]; y.insert(999, 4); y")?
+                .into_typed_array::<INT>()?,
             [1, 2, 3, 4]
         );
         assert_eq!(
-            convert_to_vec::<INT>(engine.eval("let y = [1, 2, 3]; y.insert(-2, 4); y")?),
+            engine
+                .eval::<Dynamic>("let y = [1, 2, 3]; y.insert(-2, 4); y")?
+                .into_typed_array::<INT>()?,
             [1, 4, 2, 3]
         );
         assert_eq!(
-            convert_to_vec::<INT>(engine.eval("let y = [1, 2, 3]; y.insert(-999, 4); y")?),
+            engine
+                .eval::<Dynamic>("let y = [1, 2, 3]; y.insert(-999, 4); y")?
+                .into_typed_array::<INT>()?,
             [4, 1, 2, 3]
         );
         assert_eq!(
@@ -67,43 +75,49 @@ fn test_arrays() -> Result<(), Box<EvalAltResult>> {
         );
 
         assert_eq!(
-            convert_to_vec::<INT>(engine.eval(
-                "
-                    let x = [2, 9];
-                    x.insert(-1, 1);
-                    x.insert(999, 3);
-                    x.insert(-9, 99);
+            engine
+                .eval::<Dynamic>(
+                    "
+                        let x = [2, 9];
+                        x.insert(-1, 1);
+                        x.insert(999, 3);
+                        x.insert(-9, 99);
 
-                    let r = x.remove(2);
+                        let r = x.remove(2);
 
-                    let y = [4, 5];
-                    x.append(y);
+                        let y = [4, 5];
+                        x.append(y);
 
-                    x 
-                "
-            )?),
+                        x 
+                    "
+                )?
+                .into_typed_array::<INT>()?,
             [99, 2, 9, 3, 4, 5]
         );
     }
 
     assert_eq!(
-        convert_to_vec::<INT>(engine.eval(
-            "
-                let x = [1, 2, 3];
-                x += [4, 5];
-                x
-            "
-        )?),
+        engine
+            .eval::<Dynamic>(
+                "
+                    let x = [1, 2, 3];
+                    x += [4, 5];
+                    x
+                "
+            )?
+            .into_typed_array::<INT>()?,
         [1, 2, 3, 4, 5]
     );
     assert_eq!(
-        convert_to_vec::<INT>(engine.eval(
-            "
-                let x = [1, 2, 3];
-                let y = [4, 5];
-                x + y
-            "
-        )?),
+        engine
+            .eval::<Dynamic>(
+                "
+                    let x = [1, 2, 3];
+                    let y = [4, 5];
+                    x + y
+                "
+            )?
+            .into_typed_array::<INT>()?,
         [1, 2, 3, 4, 5]
     );
 
@@ -170,44 +184,56 @@ fn test_arrays_map_reduce() -> Result<(), Box<EvalAltResult>> {
 
     assert_eq!(engine.eval::<INT>("[1].map(|x| x + 41)[0]")?, 42);
     assert_eq!(engine.eval::<INT>("([1].map(|x| x + 41))[0]")?, 42);
+    assert_eq!(
+        engine.eval::<INT>("let c = 40; let y = 1; [1].map(|x, i| c + x + y + i)[0]")?,
+        42
+    );
 
     assert_eq!(
-        convert_to_vec::<INT>(engine.eval(
-            "
-                let x = [1, 2, 3];
-                x.filter(|v| v > 2)
-            "
-        )?),
+        engine
+            .eval::<Dynamic>(
+                "
+                    let x = [1, 2, 3];
+                    x.filter(|v| v > 2)
+                "
+            )?
+            .into_typed_array::<INT>()?,
         [3]
     );
 
     assert_eq!(
-        convert_to_vec::<INT>(engine.eval(
-            "
-                let x = [1, 2, 3];
-                x.filter(|v, i| v > i)
-            "
-        )?),
+        engine
+            .eval::<Dynamic>(
+                "
+                    let x = [1, 2, 3];
+                    x.filter(|v, i| v > i)
+                "
+            )?
+            .into_typed_array::<INT>()?,
         [1, 2, 3]
     );
 
     assert_eq!(
-        convert_to_vec::<INT>(engine.eval(
-            "
-                let x = [1, 2, 3];
-                x.map(|v| v * 2)
-            "
-        )?),
+        engine
+            .eval::<Dynamic>(
+                "
+                    let x = [1, 2, 3];
+                    x.map(|v| v * 2)
+                "
+            )?
+            .into_typed_array::<INT>()?,
         [2, 4, 6]
     );
 
     assert_eq!(
-        convert_to_vec::<INT>(engine.eval(
-            "
-                let x = [1, 2, 3];
-                x.map(|v, i| v * i)
-            "
-        )?),
+        engine
+            .eval::<Dynamic>(
+                "
+                    let x = [1, 2, 3];
+                    x.map(|v, i| v * i)
+                "
+            )?
+            .into_typed_array::<INT>()?,
         [0, 2, 6]
     );
 

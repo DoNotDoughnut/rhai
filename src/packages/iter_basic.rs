@@ -1,4 +1,4 @@
-use crate::dynamic::Variant;
+use crate::types::dynamic::Variant;
 use crate::{def_package, EvalAltResult, INT};
 use std::iter::{ExactSizeIterator, FusedIterator};
 use std::ops::Range;

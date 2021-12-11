@@ -746,3 +746,52 @@ fn test_serde_json() -> serde_json::Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg(not(feature = "no_object"))]
+fn test_serde_optional() -> Result<(), Box<EvalAltResult>> {
+    #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+    struct TestStruct {
+        foo: Option<char>,
+    }
+
+    let mut engine = Engine::new();
+    engine.register_type_with_name::<TestStruct>("TestStruct");
+
+    let r = engine.eval::<Dynamic>("#{ foo: 'a' }")?;
+
+    assert_eq!(
+        from_dynamic::<TestStruct>(&r)?,
+        TestStruct { foo: Some('a') }
+    );
+
+    let r = engine.eval::<Dynamic>("#{ foo: () }")?;
+
+    assert_eq!(from_dynamic::<TestStruct>(&r)?, TestStruct { foo: None });
+
+    let r = engine.eval::<Dynamic>("#{ }")?;
+
+    assert_eq!(from_dynamic::<TestStruct>(&r)?, TestStruct { foo: None });
+
+    Ok(())
+}
+
+#[test]
+#[cfg(not(feature = "no_index"))]
+fn test_serde_blob() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    let r = engine.eval::<Dynamic>(
+        "
+            let x = blob(10);
+            for i in range(0, 10) { x[i] = i; }
+            x
+        ",
+    )?;
+
+    let r = from_dynamic::<serde_bytes::ByteBuf>(&r)?;
+
+    assert_eq!(r.to_vec(), vec![0_u8, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+    Ok(())
+}

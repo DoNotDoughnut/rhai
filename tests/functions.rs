@@ -98,8 +98,8 @@ fn test_functions_global_module() -> Result<(), Box<EvalAltResult>> {
 
     engine.register_result_fn(
         "do_stuff",
-        |context: NativeCallContext, callback: rhai::FnPtr| {
-            callback.call_dynamic(&context, None, [])
+        |context: NativeCallContext, callback: rhai::FnPtr| -> Result<INT, _> {
+            callback.call_within_context(&context, ())
         },
     );
 
@@ -137,6 +137,46 @@ fn test_functions_global_module() -> Result<(), Box<EvalAltResult>> {
                 fn foo() { global::ANSWER }
                 foo()
             "
+        )?,
+        123
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_functions_bang() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                fn foo() {
+                    hello + bar
+                }
+
+                let hello = 42;
+                let bar = 123;
+
+                foo!()
+            ",
+        )?,
+        165
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                fn foo() {
+                    hello = 0;
+                    hello + bar
+                }
+
+                let hello = 42;
+                let bar = 123;
+
+                foo!()
+            ",
         )?,
         123
     );

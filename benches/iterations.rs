@@ -45,3 +45,34 @@ fn bench_iterations_fibonacci(bench: &mut Bencher) {
 
     bench.iter(|| engine.eval_ast::<INT>(&ast).unwrap());
 }
+
+#[bench]
+fn bench_iterations_array(bench: &mut Bencher) {
+    let script = r#"
+            let x = [];
+            x.pad(1000, 0);
+            for i in range(0, 1000) { x[i] = i % 256; }
+        "#;
+
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::None);
+
+    let ast = engine.compile(script).unwrap();
+
+    bench.iter(|| engine.run_ast(&ast).unwrap());
+}
+
+#[bench]
+fn bench_iterations_blob(bench: &mut Bencher) {
+    let script = r#"
+            let x = blob(1000, 0);
+            for i in range(0, 1000) { x[i] = i % 256; }
+        "#;
+
+    let mut engine = Engine::new();
+    engine.set_optimization_level(OptimizationLevel::None);
+
+    let ast = engine.compile(script).unwrap();
+
+    bench.iter(|| engine.run_ast(&ast).unwrap());
+}

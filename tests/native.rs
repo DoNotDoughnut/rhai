@@ -30,7 +30,6 @@ fn test_native_context_fn_name() -> Result<(), Box<EvalAltResult>> {
 
     let mut engine = Engine::new();
 
-    #[allow(deprecated)]
     engine
         .register_raw_fn(
             "add_double",

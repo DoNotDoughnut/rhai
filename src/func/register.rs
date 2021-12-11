@@ -2,11 +2,11 @@
 
 #![allow(non_snake_case)]
 
-use crate::dynamic::{DynamicWriteLock, Variant};
-use crate::fn_call::FnCallArgs;
-use crate::fn_native::{CallableFunction, FnAny, SendSync};
+use crate::func::call::FnCallArgs;
+use crate::func::native::{CallableFunction, FnAny, SendSync};
 use crate::r#unsafe::unsafe_try_cast;
-use crate::token::Position;
+use crate::tokenizer::Position;
+use crate::types::dynamic::{DynamicWriteLock, Variant};
 use crate::{Dynamic, EvalAltResult, NativeCallContext};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -34,7 +34,7 @@ pub struct Mut<T>(T);
 #[must_use]
 pub fn by_ref<T: Variant + Clone>(data: &mut Dynamic) -> DynamicWriteLock<T> {
     // Directly cast the &mut Dynamic into DynamicWriteLock to access the underlying data.
-    data.write_lock::<T>().expect("data type was checked")
+    data.write_lock::<T>().expect("checked")
 }
 
 /// Dereference into value.
@@ -44,15 +44,13 @@ pub fn by_value<T: Variant + Clone>(data: &mut Dynamic) -> T {
     if TypeId::of::<T>() == TypeId::of::<&str>() {
         // If T is `&str`, data must be `ImmutableString`, so map directly to it
         data.flatten_in_place();
-        let ref_str = data.as_str_ref().expect("argument type is &str");
+        let ref_str = data.as_str_ref().expect("&str");
         let ref_t = unsafe { mem::transmute::<_, &T>(&ref_str) };
         ref_t.clone()
     } else if TypeId::of::<T>() == TypeId::of::<String>() {
         // If T is `String`, data must be `ImmutableString`, so map directly to it
-        let value = mem::take(data)
-            .into_string()
-            .expect("data type was checked");
-        unsafe_try_cast(value).expect("data type was checked")
+        let value = mem::take(data).into_string().expect("`ImmutableString`");
+        unsafe_try_cast(value).expect("checked")
     } else {
         // We consume the argument and then replace it with () - the argument is not supposed to be used again.
         // This way, we avoid having to clone the argument again, because it is already a clone when passed here.
@@ -99,6 +97,8 @@ fn is_setter(_fn_name: &str) -> bool {
     false
 }
 
+const EXPECT_ARGS: &str = "arguments";
+
 macro_rules! def_register {
     () => {
         def_register!(imp from_pure :);
@@ -128,7 +128,7 @@ macro_rules! def_register {
 
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
-                    $($let $par = ($clone)(_drain.next().expect("arguments list is fixed")); )*
+                    $($let $par = ($clone)(_drain.next().expect(EXPECT_ARGS)); )*
 
                     // Call the function with each argument value
                     let r = self($($arg),*);
@@ -156,7 +156,7 @@ macro_rules! def_register {
 
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
-                    $($let $par = ($clone)(_drain.next().expect("arguments list is fixed")); )*
+                    $($let $par = ($clone)(_drain.next().expect(EXPECT_ARGS)); )*
 
                     // Call the function with each argument value
                     let r = self(ctx, $($arg),*);
@@ -184,7 +184,7 @@ macro_rules! def_register {
 
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
-                    $($let $par = ($clone)(_drain.next().expect("arguments list is fixed")); )*
+                    $($let $par = ($clone)(_drain.next().expect(EXPECT_ARGS)); )*
 
                     // Call the function with each argument value
                     self($($arg),*).map(Dynamic::from)
@@ -209,7 +209,7 @@ macro_rules! def_register {
 
                     // The arguments are assumed to be of the correct number and types!
                     let mut _drain = args.iter_mut();
-                    $($let $par = ($clone)(_drain.next().expect("arguments list is fixed")); )*
+                    $($let $par = ($clone)(_drain.next().expect(EXPECT_ARGS)); )*
 
                     // Call the function with each argument value
                     self(ctx, $($arg),*).map(Dynamic::from)

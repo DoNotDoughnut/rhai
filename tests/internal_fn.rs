@@ -204,8 +204,7 @@ fn test_function_pointers() -> Result<(), Box<EvalAltResult>> {
 }
 
 #[test]
-#[cfg(not(feature = "no_closure"))]
-fn test_internal_fn_captures() -> Result<(), Box<EvalAltResult>> {
+fn test_internal_fn_bang() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
     assert_eq!(
@@ -219,7 +218,7 @@ fn test_internal_fn_captures() -> Result<(), Box<EvalAltResult>> {
                 foo!(1) + x
             "
         )?,
-        83
+        84
     );
 
     assert!(engine

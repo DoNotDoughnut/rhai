@@ -1,5 +1,7 @@
 #[cfg(not(feature = "no_index"))]
 use super::array_basic::BasicArrayPackage;
+#[cfg(not(feature = "no_index"))]
+use super::blob_basic::BasicBlobPackage;
 #[cfg(not(feature = "no_object"))]
 use super::map_basic::BasicMapPackage;
 use super::math_basic::BasicMathPackage;
@@ -16,7 +18,10 @@ def_package!(crate:StandardPackage:"_Standard_ package containing all built-in f
     CorePackage::init(lib);
     BasicMathPackage::init(lib);
     #[cfg(not(feature = "no_index"))]
-    BasicArrayPackage::init(lib);
+    {
+        BasicArrayPackage::init(lib);
+        BasicBlobPackage::init(lib);
+    }
     #[cfg(not(feature = "no_object"))]
     BasicMapPackage::init(lib);
     MoreStringPackage::init(lib);

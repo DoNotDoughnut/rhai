@@ -257,11 +257,20 @@ impl Serializer for &mut DynamicSerializer {
     }
 
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Box<EvalAltResult>> {
-        Ok(v.to_string().into())
+        Ok(v.into())
     }
 
-    fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Box<EvalAltResult>> {
-        Ok(Dynamic::from(v.to_vec()))
+    fn serialize_bytes(self, _v: &[u8]) -> Result<Self::Ok, Box<EvalAltResult>> {
+        #[cfg(not(feature = "no_index"))]
+        return Ok(Dynamic::from_blob(_v.to_vec()));
+
+        #[cfg(feature = "no_index")]
+        return Err(EvalAltResult::ErrorMismatchDataType(
+            "".into(),
+            "BLOB's are not supported with 'no_index'".into(),
+            Position::NONE,
+        )
+        .into());
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Box<EvalAltResult>> {

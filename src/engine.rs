@@ -2,16 +2,16 @@
 
 use crate::ast::{Expr, FnCallExpr, Ident, OpAssignment, Stmt, AST_OPTION_FLAGS::*};
 use crate::custom_syntax::CustomSyntax;
-use crate::dynamic::{map_std_type_name, AccessMode, Union, Variant};
-use crate::fn_hash::get_hasher;
-use crate::fn_native::{
-    CallableFunction, IteratorFn, OnDebugCallback, OnParseTokenCallback, OnPrintCallback,
-    OnVarCallback,
+use crate::func::{
+    get_hasher,
+    native::{OnDebugCallback, OnParseTokenCallback, OnPrintCallback, OnVarCallback},
+    CallableFunction, IteratorFn,
 };
 use crate::module::NamespaceRef;
 use crate::packages::{Package, StandardPackage};
 use crate::r#unsafe::unsafe_cast_var_name_to_lifetime;
-use crate::token::Token;
+use crate::tokenizer::Token;
+use crate::types::dynamic::{map_std_type_name, AccessMode, Union, Variant};
 use crate::{
     Dynamic, EvalAltResult, Identifier, ImmutableString, Module, Position, RhaiResult, Scope,
     Shared, StaticVec, INT,
@@ -30,7 +30,7 @@ use std::{
 };
 
 #[cfg(not(feature = "no_index"))]
-use crate::Array;
+use crate::{Array, Blob};
 
 #[cfg(not(feature = "no_object"))]
 use crate::Map;
@@ -42,10 +42,6 @@ pub type Precedence = NonZeroU8;
 
 /// _(internals)_ A stack of imported [modules][Module] plus mutable runtime global states.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 //
 // # Implementation Notes
 //
@@ -69,7 +65,9 @@ pub struct Imports {
     pub num_operations: u64,
     /// Number of modules loaded.
     pub num_modules: usize,
-    /// Function call hashes to FN_IDX_GET and FN_IDX_SET.
+    /// Function call hashes to index getters and setters.
+    ///
+    /// Not available under `no_index` and `no_object`.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
     fn_hash_indexing: (u64, u64),
     /// Embedded module resolver.
@@ -78,19 +76,28 @@ pub struct Imports {
     #[cfg(not(feature = "no_module"))]
     pub embedded_module_resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
     /// Cache of globally-defined constants.
+    ///
+    /// Not available under `no_module` and `no_function`.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     global_constants: Option<Shared<crate::Locked<BTreeMap<Identifier, Dynamic>>>>,
+}
+
+impl Default for Imports {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Imports {
     /// Create a new stack of imported [modules][Module].
     #[inline(always)]
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
-            keys: StaticVec::new(),
-            modules: StaticVec::new(),
+            keys: StaticVec::new_const(),
+            modules: StaticVec::new_const(),
             source: None,
             num_operations: 0,
             num_modules: 0,
@@ -131,12 +138,17 @@ impl Imports {
     /// Get the index of an imported [module][Module] by name.
     #[inline]
     #[must_use]
-    pub fn find(&self, name: &str) -> Option<usize> {
-        self.keys
-            .iter()
-            .enumerate()
-            .rev()
-            .find_map(|(i, key)| if key == name { Some(i) } else { None })
+    pub fn find(&self, name: impl AsRef<str>) -> Option<usize> {
+        let name = name.as_ref();
+        let len = self.keys.len();
+
+        self.keys.iter().rev().enumerate().find_map(|(i, key)| {
+            if key == name {
+                Some(len - 1 - i)
+            } else {
+                None
+            }
+        })
     }
     /// Push an imported [module][Module] onto the stack.
     #[inline(always)]
@@ -156,8 +168,8 @@ impl Imports {
     pub fn iter(&self) -> impl Iterator<Item = (&str, &Module)> {
         self.keys
             .iter()
-            .zip(self.modules.iter())
             .rev()
+            .zip(self.modules.iter().rev())
             .map(|(name, module)| (name.as_str(), module.as_ref()))
     }
     /// Get an iterator to this stack of imported [modules][Module] in reverse order.
@@ -214,7 +226,7 @@ impl Imports {
         &'a mut self,
     ) -> Option<impl DerefMut<Target = BTreeMap<Identifier, Dynamic>> + 'a> {
         if let Some(ref global_constants) = self.global_constants {
-            Some(crate::fn_native::shared_write_lock(global_constants))
+            Some(crate::func::native::shared_write_lock(global_constants))
         } else {
             None
         }
@@ -222,18 +234,14 @@ impl Imports {
     /// Set a constant into the cache of globally-defined constants.
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
-    pub(crate) fn set_global_constant(&mut self, name: &str, value: Dynamic) {
+    pub(crate) fn set_global_constant(&mut self, name: impl Into<Identifier>, value: Dynamic) {
         if self.global_constants.is_none() {
             let dict: crate::Locked<_> = BTreeMap::new().into();
             self.global_constants = Some(dict.into());
         }
 
-        crate::fn_native::shared_write_lock(
-            self.global_constants
-                .as_mut()
-                .expect("`global_constants` is `Some`"),
-        )
-        .insert(name.into(), value);
+        crate::func::native::shared_write_lock(self.global_constants.as_mut().expect("`Some`"))
+            .insert(name.into(), value);
     }
     /// Get the pre-calculated index getter hash.
     #[cfg(any(not(feature = "no_index"), not(feature = "no_object")))]
@@ -474,13 +482,22 @@ pub enum Target<'a> {
     /// The target is a mutable reference to a Shared `Dynamic` value.
     /// It holds both the access guard and the original shared value.
     #[cfg(not(feature = "no_closure"))]
-    LockGuard((crate::dynamic::DynamicWriteLock<'a, Dynamic>, Dynamic)),
+    LockGuard(
+        (
+            crate::types::dynamic::DynamicWriteLock<'a, Dynamic>,
+            Dynamic,
+        ),
+    ),
     /// The target is a temporary `Dynamic` value (i.e. the mutation can cause no side effects).
     TempValue(Dynamic),
     /// The target is a bit inside an [`INT`][crate::INT].
     /// This is necessary because directly pointing to a bit inside an [`INT`][crate::INT] is impossible.
     #[cfg(not(feature = "no_index"))]
     BitField(&'a mut Dynamic, usize, Dynamic),
+    /// The target is a byte inside a Blob.
+    /// This is necessary because directly pointing to a byte (in [`Dynamic`] form) inside a blob is impossible.
+    #[cfg(not(feature = "no_index"))]
+    BlobByte(&'a mut Dynamic, usize, Dynamic),
     /// The target is a character inside a String.
     /// This is necessary because directly pointing to a char inside a String is impossible.
     #[cfg(not(feature = "no_index"))]
@@ -499,9 +516,7 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => true,
             Self::TempValue(_) => false,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, _) => false,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, _) => false,
+            Self::BitField(_, _, _) | Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a temp value?
@@ -514,9 +529,7 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => false,
             Self::TempValue(_) => true,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, _) => false,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, _) => false,
+            Self::BitField(_, _, _) | Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a shared value?
@@ -530,9 +543,7 @@ impl<'a> Target<'a> {
             Self::LockGuard(_) => true,
             Self::TempValue(r) => r.is_shared(),
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, _) => false,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, _) => false,
+            Self::BitField(_, _, _) | Self::BlobByte(_, _, _) | Self::StringChar(_, _, _) => false,
         }
     }
     /// Is the `Target` a specific type?
@@ -548,6 +559,8 @@ impl<'a> Target<'a> {
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, _) => TypeId::of::<T>() == TypeId::of::<bool>(),
             #[cfg(not(feature = "no_index"))]
+            Self::BlobByte(_, _, _) => TypeId::of::<T>() == TypeId::of::<Blob>(),
+            #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, _) => TypeId::of::<T>() == TypeId::of::<char>(),
         }
     }
@@ -562,6 +575,8 @@ impl<'a> Target<'a> {
             Self::TempValue(v) => v,      // Owned value is simply taken
             #[cfg(not(feature = "no_index"))]
             Self::BitField(_, _, value) => value, // Boolean is taken
+            #[cfg(not(feature = "no_index"))]
+            Self::BlobByte(_, _, value) => value, // Byte is taken
             #[cfg(not(feature = "no_index"))]
             Self::StringChar(_, _, ch) => ch, // Character is taken
         }
@@ -600,9 +615,7 @@ impl<'a> Target<'a> {
                     ))
                 })?;
 
-                let value = &mut *value
-                    .write_lock::<crate::INT>()
-                    .expect("`BitField` holds `INT`");
+                let value = &mut *value.write_lock::<crate::INT>().expect("`INT`");
 
                 let index = *index;
 
@@ -618,6 +631,27 @@ impl<'a> Target<'a> {
                 }
             }
             #[cfg(not(feature = "no_index"))]
+            Self::BlobByte(value, index, new_val) => {
+                // Replace the byte at the specified index position
+                let new_byte = new_val.as_int().map_err(|err| {
+                    Box::new(EvalAltResult::ErrorMismatchDataType(
+                        "INT".to_string(),
+                        err.to_string(),
+                        Position::NONE,
+                    ))
+                })?;
+
+                let value = &mut *value.write_lock::<Blob>().expect("`Blob`");
+
+                let index = *index;
+
+                if index < value.len() {
+                    value[index] = (new_byte & 0x000f) as u8;
+                } else {
+                    unreachable!("blob index out of bounds: {}", index);
+                }
+            }
+            #[cfg(not(feature = "no_index"))]
             Self::StringChar(s, index, new_val) => {
                 // Replace the character at the specified index position
                 let new_ch = new_val.as_char().map_err(|err| {
@@ -630,7 +664,7 @@ impl<'a> Target<'a> {
 
                 let s = &mut *s
                     .write_lock::<ImmutableString>()
-                    .expect("`StringChar` holds `ImmutableString`");
+                    .expect("`ImmutableString`");
 
                 let index = *index;
 
@@ -653,10 +687,7 @@ impl<'a> From<&'a mut Dynamic> for Target<'a> {
         if value.is_shared() {
             // Cloning is cheap for a shared value
             let container = value.clone();
-            return Self::LockGuard((
-                value.write_lock::<Dynamic>().expect("cast to `Dynamic`"),
-                container,
-            ));
+            return Self::LockGuard((value.write_lock::<Dynamic>().expect("`Dynamic`"), container));
         }
 
         Self::RefMut(value)
@@ -674,9 +705,9 @@ impl Deref for Target<'_> {
             Self::LockGuard((r, _)) => &**r,
             Self::TempValue(ref r) => r,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, ref r) => r,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, ref r) => r,
+            Self::BitField(_, _, ref r)
+            | Self::BlobByte(_, _, ref r)
+            | Self::StringChar(_, _, ref r) => r,
         }
     }
 }
@@ -697,9 +728,9 @@ impl DerefMut for Target<'_> {
             Self::LockGuard((r, _)) => r.deref_mut(),
             Self::TempValue(ref mut r) => r,
             #[cfg(not(feature = "no_index"))]
-            Self::BitField(_, _, ref mut r) => r,
-            #[cfg(not(feature = "no_index"))]
-            Self::StringChar(_, _, ref mut r) => r,
+            Self::BitField(_, _, ref mut r)
+            | Self::BlobByte(_, _, ref mut r)
+            | Self::StringChar(_, _, ref mut r) => r,
         }
     }
 }
@@ -721,10 +752,6 @@ impl<T: Into<Dynamic>> From<T> for Target<'_> {
 
 /// _(internals)_ An entry in a function resolution cache.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone)]
 pub struct FnResolutionCacheEntry {
     /// Function.
@@ -735,18 +762,10 @@ pub struct FnResolutionCacheEntry {
 
 /// _(internals)_ A function resolution cache.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 pub type FnResolutionCache = BTreeMap<u64, Option<Box<FnResolutionCacheEntry>>>;
 
 /// _(internals)_ A type that holds all the current states of the [`Engine`].
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone)]
 pub struct EvalState {
     /// Normally, access to variables are parsed with a relative offset into the [`Scope`] to avoid a lookup.
@@ -765,11 +784,11 @@ impl EvalState {
     /// Create a new [`EvalState`].
     #[inline(always)]
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             always_search_scope: false,
             scope_level: 0,
-            fn_resolution_caches: StaticVec::new(),
+            fn_resolution_caches: StaticVec::new_const(),
         }
     }
     /// Is the state currently at global (root) level?
@@ -777,6 +796,12 @@ impl EvalState {
     #[must_use]
     pub const fn is_global(&self) -> bool {
         self.scope_level == 0
+    }
+    /// Get the number of function resolution cache(s) in the stack.
+    #[inline(always)]
+    #[must_use]
+    pub fn fn_resolution_caches_len(&self) -> usize {
+        self.fn_resolution_caches.len()
     }
     /// Get a mutable reference to the current function resolution cache.
     #[inline]
@@ -786,9 +811,7 @@ impl EvalState {
             // Push a new function resolution cache if the stack is empty
             self.push_fn_resolution_cache();
         }
-        self.fn_resolution_caches
-            .last_mut()
-            .expect("at least one function resolution cache")
+        self.fn_resolution_caches.last_mut().expect("not empty")
     }
     /// Push an empty function resolution cache onto the stack and make it current.
     #[allow(dead_code)]
@@ -796,83 +819,10 @@ impl EvalState {
     pub fn push_fn_resolution_cache(&mut self) {
         self.fn_resolution_caches.push(BTreeMap::new());
     }
-    /// Remove the current function resolution cache from the stack and make the last one current.
-    ///
-    /// # Panics
-    ///
-    /// Panics if there is no more function resolution cache in the stack.
+    /// Rewind the function resolution caches stack to a particular size.
     #[inline(always)]
-    pub fn pop_fn_resolution_cache(&mut self) {
-        self.fn_resolution_caches
-            .pop()
-            .expect("at least one function resolution cache");
-    }
-}
-
-/// _(internals)_ A type containing all the limits imposed by the [`Engine`].
-/// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
-#[cfg(not(feature = "unchecked"))]
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Limits {
-    /// Maximum levels of call-stack to prevent infinite recursion.
-    ///
-    /// Set to zero to effectively disable function calls.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
-    pub max_call_stack_depth: usize,
-    /// Maximum depth of statements/expressions at global level.
-    pub max_expr_depth: Option<NonZeroUsize>,
-    /// Maximum depth of statements/expressions in functions.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
-    pub max_function_expr_depth: Option<NonZeroUsize>,
-    /// Maximum number of operations allowed to run.
-    pub max_operations: Option<std::num::NonZeroU64>,
-    /// Maximum number of [modules][Module] allowed to load.
-    ///
-    /// Set to zero to effectively disable loading any [module][Module].
-    ///
-    /// Not available under `no_module`.
-    #[cfg(not(feature = "no_module"))]
-    pub max_modules: usize,
-    /// Maximum length of a [string][ImmutableString].
-    pub max_string_size: Option<NonZeroUsize>,
-    /// Maximum length of an [array][Array].
-    ///
-    /// Not available under `no_index`.
-    #[cfg(not(feature = "no_index"))]
-    pub max_array_size: Option<NonZeroUsize>,
-    /// Maximum number of properties in an [object map][Map].
-    ///
-    /// Not available under `no_object`.
-    #[cfg(not(feature = "no_object"))]
-    pub max_map_size: Option<NonZeroUsize>,
-}
-
-#[cfg(not(feature = "unchecked"))]
-impl Limits {
-    pub const fn new() -> Self {
-        Self {
-            #[cfg(not(feature = "no_function"))]
-            max_call_stack_depth: MAX_CALL_STACK_DEPTH,
-            max_expr_depth: NonZeroUsize::new(MAX_EXPR_DEPTH),
-            #[cfg(not(feature = "no_function"))]
-            max_function_expr_depth: NonZeroUsize::new(MAX_FUNCTION_EXPR_DEPTH),
-            max_operations: None,
-            #[cfg(not(feature = "no_module"))]
-            max_modules: usize::MAX,
-            max_string_size: None,
-            #[cfg(not(feature = "no_index"))]
-            max_array_size: None,
-            #[cfg(not(feature = "no_object"))]
-            max_map_size: None,
-        }
+    pub fn rewind_fn_resolution_caches(&mut self, len: usize) {
+        self.fn_resolution_caches.truncate(len);
     }
 }
 
@@ -1017,15 +967,18 @@ pub struct Engine {
     pub(crate) debug: Option<OnDebugCallback>,
     /// Callback closure for progress reporting.
     #[cfg(not(feature = "unchecked"))]
-    pub(crate) progress: Option<crate::fn_native::OnProgressCallback>,
+    pub(crate) progress: Option<crate::func::native::OnProgressCallback>,
 
-    /// Optimize the AST after compilation.
+    /// Optimize the [`AST`][crate::AST] after compilation.
     #[cfg(not(feature = "no_optimize"))]
     pub(crate) optimization_level: crate::OptimizationLevel,
 
+    /// Language options.
+    pub(crate) options: crate::api::options::LanguageOptions,
+
     /// Max limits.
     #[cfg(not(feature = "unchecked"))]
-    pub(crate) limits: Limits,
+    pub(crate) limits: crate::api::limits::Limits,
 }
 
 impl fmt::Debug for Engine {
@@ -1046,24 +999,24 @@ impl Default for Engine {
 #[cfg(not(feature = "no_object"))]
 #[inline]
 #[must_use]
-pub fn make_getter(id: &str) -> String {
-    format!("{}{}", FN_GET, id)
+pub fn make_getter(id: impl AsRef<str>) -> String {
+    format!("{}{}", FN_GET, id.as_ref())
 }
 
 /// Make setter function
 #[cfg(not(feature = "no_object"))]
 #[inline]
 #[must_use]
-pub fn make_setter(id: &str) -> String {
-    format!("{}{}", FN_SET, id)
+pub fn make_setter(id: impl AsRef<str>) -> String {
+    format!("{}{}", FN_SET, id.as_ref())
 }
 
 /// Is this function an anonymous function?
 #[cfg(not(feature = "no_function"))]
 #[inline(always)]
 #[must_use]
-pub fn is_anonymous_fn(fn_name: &str) -> bool {
-    fn_name.starts_with(FN_ANONYMOUS)
+pub fn is_anonymous_fn(fn_name: impl AsRef<str>) -> bool {
+    fn_name.as_ref().starts_with(FN_ANONYMOUS)
 }
 
 /// Print to `stdout`
@@ -1122,7 +1075,7 @@ impl Engine {
     #[must_use]
     pub fn new_raw() -> Self {
         let mut engine = Self {
-            global_modules: StaticVec::new(),
+            global_modules: StaticVec::new_const(),
             global_sub_modules: BTreeMap::new(),
 
             #[cfg(not(feature = "no_module"))]
@@ -1144,10 +1097,12 @@ impl Engine {
             progress: None,
 
             #[cfg(not(feature = "no_optimize"))]
-            optimization_level: Default::default(),
+            optimization_level: crate::OptimizationLevel::default(),
+
+            options: crate::api::options::LanguageOptions::new(),
 
             #[cfg(not(feature = "unchecked"))]
-            limits: Limits::new(),
+            limits: crate::api::limits::Limits::new(),
         };
 
         // Add the global namespace module
@@ -1188,10 +1143,10 @@ impl Engine {
 
         if let Some(index) = index {
             let offset = mods.len() - index.get();
-            Some(mods.get(offset).expect("offset within range"))
+            Some(mods.get(offset).expect("within range"))
         } else {
             mods.find(root)
-                .map(|n| mods.get(n).expect("index is valid"))
+                .map(|n| mods.get(n).expect("valid index"))
                 .or_else(|| self.global_sub_modules.get(root).cloned())
         }
     }
@@ -1327,7 +1282,7 @@ impl Engine {
                 level: 0,
             };
             match resolve_var(
-                expr.get_variable_name(true).expect("`expr` is `Variable`"),
+                expr.get_variable_name(true).expect("`Variable`"),
                 index,
                 &context,
             ) {
@@ -1344,7 +1299,7 @@ impl Engine {
             scope.len() - index
         } else {
             // Find the variable in the scope
-            let var_name = expr.get_variable_name(true).expect("`expr` is `Variable`");
+            let var_name = expr.get_variable_name(true).expect("`Variable`");
             scope
                 .get_index(var_name)
                 .ok_or_else(|| EvalAltResult::ErrorVariableNotFound(var_name.to_string(), var_pos))?
@@ -1378,16 +1333,14 @@ impl Engine {
         let _terminate_chaining = terminate_chaining;
 
         // Pop the last index value
-        let idx_val = idx_values.pop().expect("index chain is never empty");
+        let idx_val = idx_values.pop().expect("not empty");
 
         match chain_type {
             #[cfg(not(feature = "no_index"))]
             ChainType::Indexing => {
                 let pos = rhs.position();
                 let root_pos = idx_val.position();
-                let idx_val = idx_val
-                    .into_index_value()
-                    .expect("`chain_type` is `ChainType::Index`");
+                let idx_val = idx_val.into_index_value().expect("`ChainType::Index`");
 
                 match rhs {
                     // xxx[idx].expr... | xxx[idx][expr]...
@@ -1440,8 +1393,7 @@ impl Engine {
                     }
                     // xxx[rhs] op= new_val
                     _ if new_val.is_some() => {
-                        let ((new_val, new_pos), (op_info, op_pos)) =
-                            new_val.expect("`new_val` is `Some`");
+                        let ((new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
                         let mut idx_val_for_setter = idx_val.clone();
 
                         let try_setter = match self.get_indexed_mut(
@@ -1495,7 +1447,7 @@ impl Engine {
                         let FnCallExpr { name, hashes, .. } = x.as_ref();
                         let call_args = &mut idx_val
                             .into_fn_call_args()
-                            .expect("`chain_type` is `ChainType::Dot` with `Expr::FnCallExpr`");
+                            .expect("`ChainType::Dot` with `Expr::FnCallExpr`");
                         self.make_method_call(
                             mods, state, lib, name, *hashes, target, call_args, *pos, level,
                         )
@@ -1511,8 +1463,7 @@ impl Engine {
                     // {xxx:map}.id op= ???
                     Expr::Property(x) if target.is::<Map>() && new_val.is_some() => {
                         let (name, pos) = &x.2;
-                        let ((new_val, new_pos), (op_info, op_pos)) =
-                            new_val.expect("`new_val` is `Some`");
+                        let ((new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
                         let index = name.into();
                         {
                             let val_target = &mut self.get_indexed_mut(
@@ -1539,8 +1490,7 @@ impl Engine {
                     // xxx.id op= ???
                     Expr::Property(x) if new_val.is_some() => {
                         let ((getter, hash_get), (setter, hash_set), (name, pos)) = x.as_ref();
-                        let ((mut new_val, new_pos), (op_info, op_pos)) =
-                            new_val.expect("`new_val` is `Some`");
+                        let ((mut new_val, new_pos), (op_info, op_pos)) = new_val.expect("`Some`");
 
                         if op_info.is_some() {
                             let hash = FnCallHashes::from_native(*hash_get);
@@ -1835,7 +1785,7 @@ impl Engine {
             _ => unreachable!("index or dot chain expected, but gets {:?}", expr),
         };
 
-        let idx_values = &mut StaticVec::new();
+        let idx_values = &mut StaticVec::new_const();
 
         self.eval_dot_index_chain_arguments(
             scope, mods, state, lib, this_ptr, rhs, term, chain_type, idx_values, 0, level,
@@ -1906,20 +1856,22 @@ impl Engine {
                 let crate::ast::FnCallExpr {
                     args, constants, ..
                 } = x.as_ref();
-                let mut arg_values = StaticVec::with_capacity(args.len());
-                let mut first_arg_pos = Position::NONE;
 
-                for index in 0..args.len() {
-                    let (value, pos) = self.get_arg_value(
-                        scope, mods, state, lib, this_ptr, level, args, constants, index,
-                    )?;
-                    arg_values.push(value.flatten());
-                    if index == 0 {
-                        first_arg_pos = pos
-                    }
-                }
+                let (values, pos) = args.iter().try_fold(
+                    (StaticVec::with_capacity(args.len()), Position::NONE),
+                    |(mut values, mut pos), expr| -> Result<_, Box<EvalAltResult>> {
+                        let (value, arg_pos) = self.get_arg_value(
+                            scope, mods, state, lib, this_ptr, level, expr, constants,
+                        )?;
+                        if values.is_empty() {
+                            pos = arg_pos;
+                        }
+                        values.push(value.flatten());
+                        Ok((values, pos))
+                    },
+                )?;
 
-                idx_values.push((arg_values, first_arg_pos).into());
+                idx_values.push((values, pos).into());
             }
             #[cfg(not(feature = "no_object"))]
             Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dotting => {
@@ -1950,20 +1902,22 @@ impl Engine {
                         let crate::ast::FnCallExpr {
                             args, constants, ..
                         } = x.as_ref();
-                        let mut arg_values = StaticVec::with_capacity(args.len());
-                        let mut first_arg_pos = Position::NONE;
 
-                        for index in 0..args.len() {
-                            let (value, pos) = self.get_arg_value(
-                                scope, mods, state, lib, this_ptr, level, args, constants, index,
-                            )?;
-                            arg_values.push(value.flatten());
-                            if index == 0 {
-                                first_arg_pos = pos;
-                            }
-                        }
-
-                        (arg_values, first_arg_pos).into()
+                        args.iter()
+                            .try_fold(
+                                (StaticVec::with_capacity(args.len()), Position::NONE),
+                                |(mut values, mut pos), expr| -> Result<_, Box<EvalAltResult>> {
+                                    let (value, arg_pos) = self.get_arg_value(
+                                        scope, mods, state, lib, this_ptr, level, expr, constants,
+                                    )?;
+                                    if values.is_empty() {
+                                        pos = arg_pos
+                                    }
+                                    values.push(value.flatten());
+                                    Ok((values, pos))
+                                },
+                            )?
+                            .into()
                     }
                     #[cfg(not(feature = "no_object"))]
                     Expr::FnCall(_, _) if _parent_chain_type == ChainType::Dotting => {
@@ -2066,6 +2020,50 @@ impl Engine {
                 arr.get_mut(arr_idx)
                     .map(Target::from)
                     .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos).into())
+            }
+
+            #[cfg(not(feature = "no_index"))]
+            Dynamic(Union::Blob(arr, _, _)) => {
+                // val_blob[idx]
+                let index = idx
+                    .as_int()
+                    .map_err(|typ| self.make_type_mismatch_err::<crate::INT>(typ, idx_pos))?;
+
+                let arr_len = arr.len();
+
+                #[cfg(not(feature = "unchecked"))]
+                let arr_idx = if index < 0 {
+                    // Count from end if negative
+                    arr_len
+                        - index
+                            .checked_abs()
+                            .ok_or_else(|| EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos))
+                            .and_then(|n| {
+                                if n as usize > arr_len {
+                                    Err(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos)
+                                        .into())
+                                } else {
+                                    Ok(n as usize)
+                                }
+                            })?
+                } else {
+                    index as usize
+                };
+                #[cfg(feature = "unchecked")]
+                let arr_idx = if index < 0 {
+                    // Count from end if negative
+                    arr_len - index.abs() as usize
+                } else {
+                    index as usize
+                };
+
+                let value = arr
+                    .get(arr_idx)
+                    .map(|&v| (v as INT).into())
+                    .ok_or_else(|| {
+                        Box::new(EvalAltResult::ErrorArrayBounds(arr_len, index, idx_pos))
+                    })?;
+                Ok(Target::BlobByte(target, arr_idx, value))
             }
 
             #[cfg(not(feature = "no_object"))]
@@ -2216,7 +2214,7 @@ impl Engine {
             // Statement block
             Expr::Stmt(x) if x.is_empty() => Ok(Dynamic::UNIT),
             Expr::Stmt(x) => {
-                self.eval_stmt_block(scope, mods, state, lib, this_ptr, x, true, level)
+                self.eval_stmt_block(scope, mods, state, lib, this_ptr, x, true, true, level)
             }
 
             // lhs[idx_expr]
@@ -2236,7 +2234,7 @@ impl Engine {
                 let mut pos = *pos;
                 let mut result: Dynamic = self.const_empty_string().into();
 
-                for expr in x.iter() {
+                x.iter().try_for_each(|expr| {
                     let item = self.eval_expr(scope, mods, state, lib, this_ptr, expr, level)?;
 
                     self.eval_op_assignment(
@@ -2254,8 +2252,8 @@ impl Engine {
                     pos = expr.position();
 
                     self.check_data_size(&result)
-                        .map_err(|err| err.fill_position(pos))?;
-                }
+                        .map_err(|err| err.fill_position(pos))
+                })?;
 
                 assert!(
                     result.is::<ImmutableString>(),
@@ -2266,30 +2264,35 @@ impl Engine {
             }
 
             #[cfg(not(feature = "no_index"))]
-            Expr::Array(x, _) => {
-                let mut arr = Array::with_capacity(x.len());
-                for item in x.as_ref() {
-                    arr.push(
-                        self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?
-                            .flatten(),
-                    );
-                }
-                Ok(arr.into())
-            }
+            Expr::Array(x, _) => Ok(x
+                .iter()
+                .try_fold(
+                    Array::with_capacity(x.len()),
+                    |mut arr, item| -> Result<_, Box<EvalAltResult>> {
+                        arr.push(
+                            self.eval_expr(scope, mods, state, lib, this_ptr, item, level)?
+                                .flatten(),
+                        );
+                        Ok(arr)
+                    },
+                )?
+                .into()),
 
             #[cfg(not(feature = "no_object"))]
-            Expr::Map(x, _) => {
-                let mut map = x.1.clone();
-                for (Ident { name: key, .. }, expr) in &x.0 {
-                    let value_ref = map
-                        .get_mut(key.as_str())
-                        .expect("template contains all keys");
-                    *value_ref = self
-                        .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
-                        .flatten();
-                }
-                Ok(map.into())
-            }
+            Expr::Map(x, _) => Ok(x
+                .0
+                .iter()
+                .try_fold(
+                    x.1.clone(),
+                    |mut map, (Ident { name: key, .. }, expr)| -> Result<_, Box<EvalAltResult>> {
+                        let value_ref = map.get_mut(key.as_str()).expect("contains all keys");
+                        *value_ref = self
+                            .eval_expr(scope, mods, state, lib, this_ptr, expr, level)?
+                            .flatten();
+                        Ok(map)
+                    },
+                )?
+                .into()),
 
             // Namespace-qualified function call
             Expr::FnCall(x, pos) if x.is_qualified() => {
@@ -2313,7 +2316,7 @@ impl Engine {
             Expr::FnCall(x, pos) => {
                 let FnCallExpr {
                     name,
-                    capture,
+                    capture_parent_scope: capture,
                     hashes,
                     args,
                     constants,
@@ -2356,14 +2359,8 @@ impl Engine {
 
             Expr::Custom(custom, _) => {
                 let expressions: StaticVec<_> = custom.inputs.iter().map(Into::into).collect();
-                let key_token = custom
-                    .tokens
-                    .first()
-                    .expect("custom syntax stream contains at least one token");
-                let custom_def = self
-                    .custom_syntax
-                    .get(key_token)
-                    .expect("custom syntax leading token matches with definition");
+                let key_token = custom.tokens.first().expect("not empty");
+                let custom_def = self.custom_syntax.get(key_token).expect("must match");
                 let mut context = EvalContext {
                     engine: self,
                     scope,
@@ -2392,19 +2389,20 @@ impl Engine {
         lib: &[&Module],
         this_ptr: &mut Option<&mut Dynamic>,
         statements: &[Stmt],
-        restore_prev_state: bool,
+        restore_orig_state: bool,
+        rewind_scope: bool,
         level: usize,
     ) -> RhaiResult {
         if statements.is_empty() {
             return Ok(Dynamic::UNIT);
         }
 
-        let mut _extra_fn_resolution_cache = false;
-        let prev_always_search_scope = state.always_search_scope;
-        let prev_scope_len = scope.len();
-        let prev_mods_len = mods.len();
+        let orig_always_search_scope = state.always_search_scope;
+        let orig_scope_len = scope.len();
+        let orig_mods_len = mods.len();
+        let orig_fn_resolution_caches_len = state.fn_resolution_caches_len();
 
-        if restore_prev_state {
+        if rewind_scope {
             state.scope_level += 1;
         }
 
@@ -2422,15 +2420,14 @@ impl Engine {
                     .skip(_mods_len)
                     .any(|(_, m)| m.contains_indexed_global_functions())
                 {
-                    if _extra_fn_resolution_cache {
+                    if state.fn_resolution_caches_len() > orig_fn_resolution_caches_len {
                         // When new module is imported with global functions and there is already
                         // a new cache, clear it - notice that this is expensive as all function
                         // resolutions must start again
                         state.fn_resolution_cache_mut().clear();
-                    } else if restore_prev_state {
+                    } else if restore_orig_state {
                         // When new module is imported with global functions, push a new cache
                         state.push_fn_resolution_cache();
-                        _extra_fn_resolution_cache = true;
                     } else {
                         // When the block is to be evaluated in-place, just clear the current cache
                         state.fn_resolution_cache_mut().clear();
@@ -2441,19 +2438,19 @@ impl Engine {
             Ok(r)
         });
 
-        if _extra_fn_resolution_cache {
-            // If imports list is modified, pop the functions lookup cache
-            state.pop_fn_resolution_cache();
-        }
+        // If imports list is modified, pop the functions lookup cache
+        state.rewind_fn_resolution_caches(orig_fn_resolution_caches_len);
 
-        if restore_prev_state {
-            scope.rewind(prev_scope_len);
-            mods.truncate(prev_mods_len);
+        if rewind_scope {
+            scope.rewind(orig_scope_len);
             state.scope_level -= 1;
+        }
+        if restore_orig_state {
+            mods.truncate(orig_mods_len);
 
             // The impact of new local variables goes away at the end of a block
             // because any new variables introduced will go out of scope
-            state.always_search_scope = prev_always_search_scope;
+            state.always_search_scope = orig_always_search_scope;
         }
 
         result
@@ -2497,7 +2494,7 @@ impl Engine {
                 let target_is_shared = false;
 
                 if target_is_shared {
-                    lock_guard = target.write_lock::<Dynamic>().expect("cast to `Dynamic`");
+                    lock_guard = target.write_lock::<Dynamic>().expect("`Dynamic`");
                     lhs_ptr_inner = &mut *lock_guard;
                 } else {
                     lhs_ptr_inner = &mut *target;
@@ -2567,9 +2564,7 @@ impl Engine {
                 let (mut lhs_ptr, pos) =
                     self.search_namespace(scope, mods, state, lib, this_ptr, lhs_expr)?;
 
-                let var_name = lhs_expr
-                    .get_variable_name(false)
-                    .expect("`lhs_ptr` is `Variable`");
+                let var_name = lhs_expr.get_variable_name(false).expect("`Variable`");
 
                 if !lhs_ptr.is_ref() {
                     return Err(EvalAltResult::ErrorAssignmentToConstant(
@@ -2638,9 +2633,9 @@ impl Engine {
 
             // Block scope
             Stmt::Block(statements, _) if statements.is_empty() => Ok(Dynamic::UNIT),
-            Stmt::Block(statements, _) => {
-                self.eval_stmt_block(scope, mods, state, lib, this_ptr, statements, true, level)
-            }
+            Stmt::Block(statements, _) => self.eval_stmt_block(
+                scope, mods, state, lib, this_ptr, statements, true, true, level,
+            ),
 
             // If statement
             Stmt::If(expr, x, _) => {
@@ -2651,13 +2646,17 @@ impl Engine {
 
                 if guard_val {
                     if !x.0.is_empty() {
-                        self.eval_stmt_block(scope, mods, state, lib, this_ptr, &x.0, true, level)
+                        self.eval_stmt_block(
+                            scope, mods, state, lib, this_ptr, &x.0, true, true, level,
+                        )
                     } else {
                         Ok(Dynamic::UNIT)
                     }
                 } else {
                     if !x.1.is_empty() {
-                        self.eval_stmt_block(scope, mods, state, lib, this_ptr, &x.1, true, level)
+                        self.eval_stmt_block(
+                            scope, mods, state, lib, this_ptr, &x.1, true, true, level,
+                        )
                     } else {
                         Ok(Dynamic::UNIT)
                     }
@@ -2697,7 +2696,7 @@ impl Engine {
 
                         Some(if !statements.is_empty() {
                             self.eval_stmt_block(
-                                scope, mods, state, lib, this_ptr, statements, true, level,
+                                scope, mods, state, lib, this_ptr, statements, true, true, level,
                             )
                         } else {
                             Ok(Dynamic::UNIT)
@@ -2711,7 +2710,7 @@ impl Engine {
                     // Default match clause
                     if !def_stmt.is_empty() {
                         self.eval_stmt_block(
-                            scope, mods, state, lib, this_ptr, def_stmt, true, level,
+                            scope, mods, state, lib, this_ptr, def_stmt, true, true, level,
                         )
                     } else {
                         Ok(Dynamic::UNIT)
@@ -2722,7 +2721,8 @@ impl Engine {
             // Loop
             Stmt::While(Expr::Unit(_), body, _) => loop {
                 if !body.is_empty() {
-                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    match self
+                        .eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, true, level)
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
@@ -2748,7 +2748,8 @@ impl Engine {
                     return Ok(Dynamic::UNIT);
                 }
                 if !body.is_empty() {
-                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    match self
+                        .eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, true, level)
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
@@ -2765,7 +2766,8 @@ impl Engine {
                 let is_while = !options.contains(AST_OPTION_NEGATED);
 
                 if !body.is_empty() {
-                    match self.eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, level)
+                    match self
+                        .eval_stmt_block(scope, mods, state, lib, this_ptr, body, true, true, level)
                     {
                         Ok(_) => (),
                         Err(err) => match *err {
@@ -2829,7 +2831,7 @@ impl Engine {
                             if x > INT::MAX as usize {
                                 return Err(EvalAltResult::ErrorArithmetic(
                                     format!("for-loop counter overflow: {}", x),
-                                    counter.as_ref().expect("`counter` is `Some`").pos,
+                                    counter.as_ref().expect("`Some`").pos,
                                 )
                                 .into());
                             }
@@ -2837,7 +2839,7 @@ impl Engine {
                             let mut counter_var = scope
                                 .get_mut_by_index(c)
                                 .write_lock::<INT>()
-                                .expect("counter holds `INT`");
+                                .expect("`INT`");
                             *counter_var = x as INT;
                         }
 
@@ -2850,7 +2852,7 @@ impl Engine {
                         let loop_var_is_shared = false;
 
                         if loop_var_is_shared {
-                            let mut value_ref = loop_var.write_lock().expect("cast to `Dynamic`");
+                            let mut value_ref = loop_var.write_lock().expect("`Dynamic`");
                             *value_ref = value;
                         } else {
                             *loop_var = value;
@@ -2864,7 +2866,7 @@ impl Engine {
                         }
 
                         let result = self.eval_stmt_block(
-                            scope, mods, state, lib, this_ptr, statements, true, level,
+                            scope, mods, state, lib, this_ptr, statements, true, true, level,
                         );
 
                         match result {
@@ -2911,7 +2913,7 @@ impl Engine {
             Stmt::FnCall(x, pos) => {
                 let FnCallExpr {
                     name,
-                    capture,
+                    capture_parent_scope: capture,
                     hashes,
                     args,
                     constants,
@@ -2928,7 +2930,9 @@ impl Engine {
                 let (try_stmt, err_var, catch_stmt) = x.as_ref();
 
                 let result = self
-                    .eval_stmt_block(scope, mods, state, lib, this_ptr, try_stmt, true, level)
+                    .eval_stmt_block(
+                        scope, mods, state, lib, this_ptr, try_stmt, true, true, level,
+                    )
                     .map(|_| Dynamic::UNIT);
 
                 match result {
@@ -2958,16 +2962,11 @@ impl Engine {
                                 if err_pos.is_none() {
                                     // No position info
                                 } else {
-                                    let line = err_pos
-                                        .line()
-                                        .expect("non-NONE `Position` has line number")
-                                        as INT;
+                                    let line = err_pos.line().expect("line number") as INT;
                                     let position = if err_pos.is_beginning_of_line() {
                                         0
                                     } else {
-                                        err_pos
-                                            .position()
-                                            .expect("non-NONE `Position` has character position")
+                                        err_pos.position().expect("character position")
                                     } as INT;
                                     err_map.insert("line".into(), line.into());
                                     err_map.insert("position".into(), position.into());
@@ -2985,7 +2984,7 @@ impl Engine {
                         });
 
                         let result = self.eval_stmt_block(
-                            scope, mods, state, lib, this_ptr, catch_stmt, true, level,
+                            scope, mods, state, lib, this_ptr, catch_stmt, true, true, level,
                         );
 
                         scope.rewind(orig_scope_len);
@@ -3049,7 +3048,7 @@ impl Engine {
                     #[cfg(not(feature = "no_function"))]
                     #[cfg(not(feature = "no_module"))]
                     if entry_type == AccessMode::ReadOnly && lib.iter().any(|&m| !m.is_empty()) {
-                        mods.set_global_constant(name, value.clone());
+                        mods.set_global_constant(name.clone(), value.clone());
                     }
 
                     (
@@ -3114,7 +3113,7 @@ impl Engine {
                     if let Some(name) = export.as_ref().map(|x| x.name.clone()) {
                         if !module.is_indexed() {
                             // Index the module (making a clone copy if necessary) if it is not indexed
-                            let mut module = crate::fn_native::shared_take_or_clone(module);
+                            let mut module = crate::func::native::shared_take_or_clone(module);
                             module.build_index();
                             mods.push(name, module);
                         } else {
@@ -3133,19 +3132,20 @@ impl Engine {
             // Export statement
             #[cfg(not(feature = "no_module"))]
             Stmt::Export(list, _) => {
-                for (Ident { name, pos, .. }, Ident { name: rename, .. }) in list.as_ref() {
-                    // Mark scope variables as public
-                    if let Some((index, _)) = scope.get_index(name) {
-                        scope.add_entry_alias(
-                            index,
-                            if rename.is_empty() { name } else { rename }.clone(),
-                        );
-                    } else {
-                        return Err(
-                            EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos).into()
-                        );
-                    }
-                }
+                list.iter().try_for_each(
+                    |(Ident { name, pos, .. }, Ident { name: rename, .. })| {
+                        // Mark scope variables as public
+                        if let Some((index, _)) = scope.get_index(name) {
+                            scope.add_entry_alias(
+                                index,
+                                if rename.is_empty() { name } else { rename }.clone(),
+                            );
+                            Ok(()) as Result<_, Box<EvalAltResult>>
+                        } else {
+                            Err(EvalAltResult::ErrorVariableNotFound(name.to_string(), *pos).into())
+                        }
+                    },
+                )?;
                 Ok(Dynamic::UNIT)
             }
 
@@ -3172,7 +3172,7 @@ impl Engine {
     fn check_return_value(&self, mut result: RhaiResult) -> RhaiResult {
         if let Ok(ref mut r) = result {
             // Concentrate all empty strings into one instance to save memory
-            if let Dynamic(crate::dynamic::Union::Str(s, _, _)) = r {
+            if let Dynamic(crate::types::dynamic::Union::Str(s, _, _)) = r {
                 if s.is_empty() {
                     if !s.ptr_eq(&self.empty_string) {
                         *s = self.const_empty_string();
@@ -3207,6 +3207,7 @@ impl Engine {
                                 let (a, m, s) = calc_size(value);
                                 (arrays + a + 1, maps + m, strings + s)
                             }
+                            Union::Blob(ref a, _, _) => (arrays + 1 + a.len(), maps, strings),
                             #[cfg(not(feature = "no_object"))]
                             Union::Map(_, _, _) => {
                                 let (a, m, s) = calc_size(value);
@@ -3216,6 +3217,8 @@ impl Engine {
                             _ => (arrays + 1, maps, strings),
                         })
                 }
+                #[cfg(not(feature = "no_index"))]
+                Union::Blob(ref arr, _, _) => (arr.len(), 0, 0),
                 #[cfg(not(feature = "no_object"))]
                 Union::Map(ref map, _, _) => {
                     map.values()
@@ -3225,6 +3228,8 @@ impl Engine {
                                 let (a, m, s) = calc_size(value);
                                 (arrays + a, maps + m + 1, strings + s)
                             }
+                            #[cfg(not(feature = "no_index"))]
+                            Union::Blob(ref a, _, _) => (arrays + a.len(), maps, strings),
                             Union::Map(_, _, _) => {
                                 let (a, m, s) = calc_size(value);
                                 (arrays + a, maps + m + 1, strings + s)

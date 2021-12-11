@@ -329,13 +329,10 @@ mod f32_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn sign(x: f32) -> Result<INT, Box<EvalAltResult>> {
-        if x == 0.0 {
-            Ok(0)
-        } else {
-            match x.signum() {
-                x if x.is_nan() => Err(make_err("Sign of NaN is undefined")),
-                x => Ok(x as INT),
-            }
+        match x.signum() {
+            _ if x == 0.0 => Ok(0),
+            x if x.is_nan() => Err(make_err("Sign of NaN is undefined")),
+            x => Ok(x as INT),
         }
     }
     pub fn is_zero(x: f32) -> bool {
@@ -439,13 +436,10 @@ mod f64_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn sign(x: f64) -> Result<INT, Box<EvalAltResult>> {
-        if x == 0.0 {
-            Ok(0)
-        } else {
-            match x.signum() {
-                x if x.is_nan() => Err(make_err("Sign of NaN is undefined")),
-                x => Ok(x as INT),
-            }
+        match x.signum() {
+            _ if x == 0.0 => Ok(0),
+            x if x.is_nan() => Err(make_err("Sign of NaN is undefined")),
+            x => Ok(x as INT),
         }
     }
     pub fn is_zero(x: f64) -> bool {

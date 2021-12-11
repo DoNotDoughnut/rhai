@@ -4,7 +4,7 @@ use crate::engine::{
     Precedence, KEYWORD_DEBUG, KEYWORD_EVAL, KEYWORD_FN_PTR, KEYWORD_FN_PTR_CALL,
     KEYWORD_FN_PTR_CURRY, KEYWORD_IS_DEF_VAR, KEYWORD_PRINT, KEYWORD_THIS, KEYWORD_TYPE_OF,
 };
-use crate::fn_native::OnParseTokenCallback;
+use crate::func::native::OnParseTokenCallback;
 use crate::{Engine, LexError, StaticVec, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -29,10 +29,6 @@ use rust_decimal::Decimal;
 use crate::engine::KEYWORD_IS_DEF_FN;
 
 /// _(internals)_ A type containing commands to control the tokenizer.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Copy)]
 pub struct TokenizerControlBlock {
     /// Is the current tokenizer position within an interpolated text string?
@@ -301,10 +297,6 @@ impl AddAssign for Position {
 
 /// _(internals)_ A Rhai language token.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, PartialEq, Clone, Hash)]
 pub enum Token {
     /// An `INT` constant.
@@ -320,13 +312,13 @@ pub enum Token {
     #[cfg(feature = "decimal")]
     DecimalConstant(Decimal),
     /// An identifier.
-    Identifier(String),
+    Identifier(Box<str>),
     /// A character constant.
     CharConstant(char),
     /// A string constant.
-    StringConstant(String),
+    StringConstant(Box<str>),
     /// An interpolated string.
-    InterpolatedString(String),
+    InterpolatedString(Box<str>),
     /// `{`
     LeftBrace,
     /// `}`
@@ -489,11 +481,11 @@ pub enum Token {
     /// A lexer error.
     LexError(LexError),
     /// A comment block.
-    Comment(String),
+    Comment(Box<str>),
     /// A reserved symbol.
-    Reserved(String),
+    Reserved(Box<str>),
     /// A custom keyword.
-    Custom(String),
+    Custom(Box<str>),
     /// End of the input stream.
     EOF,
 }
@@ -603,11 +595,11 @@ impl Token {
             StringConstant(_) => "string".into(),
             InterpolatedString(_) => "string".into(),
             CharConstant(c) => c.to_string().into(),
-            Identifier(s) => s.clone().into(),
-            Reserved(s) => s.clone().into(),
-            Custom(s) => s.clone().into(),
+            Identifier(s) => s.to_string().into(),
+            Reserved(s) => s.to_string().into(),
+            Custom(s) => s.to_string().into(),
             LexError(err) => err.to_string().into(),
-            Comment(s) => s.clone().into(),
+            Comment(s) => s.to_string().into(),
 
             EOF => "{EOF}".into(),
 
@@ -695,8 +687,10 @@ impl Token {
 
     /// Reverse lookup a token from a piece of syntax.
     #[must_use]
-    pub fn lookup_from_syntax(syntax: &str) -> Option<Self> {
+    pub fn lookup_from_syntax(syntax: impl AsRef<str>) -> Option<Self> {
         use Token::*;
+
+        let syntax = syntax.as_ref();
 
         Some(match syntax {
             "{" => LeftBrace,
@@ -770,15 +764,15 @@ impl Token {
             #[cfg(not(feature = "no_function"))]
             "private" => Private,
 
+            #[cfg(feature = "no_function")]
+            "fn" | "private" => Reserved(syntax.into()),
+
             #[cfg(not(feature = "no_module"))]
             "import" => Import,
             #[cfg(not(feature = "no_module"))]
             "export" => Export,
             #[cfg(not(feature = "no_module"))]
             "as" => As,
-
-            #[cfg(feature = "no_function")]
-            "fn" | "private" => Reserved(syntax.into()),
 
             #[cfg(feature = "no_module")]
             "import" | "export" | "as" => Reserved(syntax.into()),
@@ -817,6 +811,7 @@ impl Token {
         match self {
             LexError(_)      |
             SemiColon        | // ; - is unary
+            Colon            | // #{ foo: - is unary
             Comma            | // ( ... , -expr ) - is unary
             //Period           |
             LeftBrace        | // { -expr } - is unary
@@ -975,9 +970,9 @@ impl Token {
     /// Convert a token into a function name, if possible.
     #[cfg(not(feature = "no_function"))]
     #[inline]
-    pub(crate) fn into_function_name_for_override(self) -> Result<String, Self> {
+    pub(crate) fn into_function_name_for_override(self) -> Result<Box<str>, Self> {
         match self {
-            Self::Custom(s) | Self::Identifier(s) if is_valid_function_name(&s) => Ok(s),
+            Self::Custom(s) | Self::Identifier(s) if is_valid_function_name(&*s) => Ok(s),
             _ => Err(self),
         }
     }
@@ -999,10 +994,6 @@ impl From<Token> for String {
 
 /// _(internals)_ State of the tokenizer.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct TokenizeState {
     /// Maximum length of a string.
@@ -1019,10 +1010,6 @@ pub struct TokenizeState {
 
 /// _(internals)_ Trait that encapsulates a peekable character input stream.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This trait is volatile and may change.
 pub trait InputStream {
     /// Un-get a character back into the `InputStream`.
     /// The next [`get_next`][InputStream::get_next] or [`peek_next`][InputStream::peek_next]
@@ -1065,10 +1052,6 @@ pub trait InputStream {
 ///
 /// Any time a [`StringConstant`][`Token::StringConstant`] is returned with
 /// `state.is_within_text_terminated_by` set to `Some(_)` is one of the above conditions.
-///
-/// # Volatile API
-///
-/// This function is volatile and may change.
 pub fn parse_string_literal(
     stream: &mut impl InputStream,
     state: &mut TokenizeState,
@@ -1077,7 +1060,7 @@ pub fn parse_string_literal(
     continuation: bool,
     verbatim: bool,
     allow_interpolation: bool,
-) -> Result<(String, bool), (LexError, Position)> {
+) -> Result<(Box<str>, bool), (LexError, Position)> {
     let mut result = String::with_capacity(12);
     let mut escape = String::with_capacity(12);
 
@@ -1222,9 +1205,7 @@ pub fn parse_string_literal(
 
                 #[cfg(not(feature = "no_position"))]
                 {
-                    let start_position = start
-                        .position()
-                        .expect("string must have starting position");
+                    let start_position = start.position().expect("start position");
                     skip_whitespace_until = start_position + 1;
                 }
             }
@@ -1246,8 +1227,7 @@ pub fn parse_string_literal(
             // Whitespace to skip
             #[cfg(not(feature = "no_position"))]
             _ if next_char.is_whitespace()
-                && pos.position().expect("character must have position")
-                    < skip_whitespace_until => {}
+                && pos.position().expect("position") < skip_whitespace_until => {}
 
             // All other characters
             _ => {
@@ -1268,7 +1248,7 @@ pub fn parse_string_literal(
         }
     }
 
-    Ok((result, interpolated))
+    Ok((result.into(), interpolated))
 }
 
 /// Consume the next character.
@@ -1328,10 +1308,6 @@ fn scan_block_comment(
 
 /// _(internals)_ Get the next token from the `stream`.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile API
-///
-/// This function is volatile and may change.
 #[inline]
 #[must_use]
 pub fn get_next_token(
@@ -1366,7 +1342,9 @@ fn is_numeric_digit(c: char) -> bool {
 #[cfg(feature = "metadata")]
 #[inline]
 #[must_use]
-pub fn is_doc_comment(comment: &str) -> bool {
+pub fn is_doc_comment(comment: impl AsRef<str>) -> bool {
+    let comment = comment.as_ref();
+
     (comment.starts_with("///") && !comment.starts_with("////"))
         || (comment.starts_with("/**") && !comment.starts_with("/***"))
 }
@@ -1394,14 +1372,10 @@ fn get_next_token_inner(
 
         #[cfg(not(feature = "no_function"))]
         #[cfg(feature = "metadata")]
-        let return_comment =
-            return_comment || is_doc_comment(comment.as_ref().expect("`include_comments` is true"));
+        let return_comment = return_comment || is_doc_comment(comment.as_ref().expect("`Some`"));
 
         if return_comment {
-            return Some((
-                Token::Comment(comment.expect("`return_comment` is true")),
-                start_pos,
-            ));
+            return Some((Token::Comment(comment.expect("`Some`").into()), start_pos));
         }
         if state.comment_level > 0 {
             // Reached EOF without ending comment block
@@ -1451,7 +1425,7 @@ fn get_next_token_inner(
                         }
                         #[cfg(any(not(feature = "no_float"), feature = "decimal"))]
                         '.' => {
-                            stream.get_next().expect("it is `.`");
+                            stream.get_next().expect("`.`");
 
                             // Check if followed by digits or something that cannot start a property name
                             match stream.peek_next().unwrap_or('\0') {
@@ -1485,7 +1459,7 @@ fn get_next_token_inner(
                         }
                         #[cfg(not(feature = "no_float"))]
                         'e' => {
-                            stream.get_next().expect("it is `e`");
+                            stream.get_next().expect("`e`");
 
                             // Check if followed by digits or +/-
                             match stream.peek_next().unwrap_or('\0') {
@@ -1498,7 +1472,7 @@ fn get_next_token_inner(
                                 '+' | '-' => {
                                     result.push(next_char);
                                     pos.advance();
-                                    result.push(stream.get_next().expect("it is `+` or `-`"));
+                                    result.push(stream.get_next().expect("`+` or `-`"));
                                     pos.advance();
                                 }
                                 // Not a floating-point number
@@ -1646,10 +1620,13 @@ fn get_next_token_inner(
                         |(err, err_pos)| (Token::LexError(err), err_pos),
                         |(result, _)| {
                             let mut chars = result.chars();
-                            let first = chars.next().expect("`chars` is not empty");
+                            let first = chars.next().expect("not empty");
 
                             if chars.next().is_some() {
-                                (Token::LexError(LERR::MalformedChar(result)), start_pos)
+                                (
+                                    Token::LexError(LERR::MalformedChar(result.to_string())),
+                                    start_pos,
+                                )
                             } else {
                                 (Token::CharConstant(first), start_pos)
                             }
@@ -1773,7 +1750,7 @@ fn get_next_token_inner(
                 }
 
                 if let Some(comment) = comment {
-                    return Some((Token::Comment(comment), start_pos));
+                    return Some((Token::Comment(comment.into()), start_pos));
                 }
             }
             ('/', '*') => {
@@ -1800,7 +1777,7 @@ fn get_next_token_inner(
                     scan_block_comment(stream, state.comment_level, pos, comment.as_mut());
 
                 if let Some(comment) = comment {
-                    return Some((Token::Comment(comment), start_pos));
+                    return Some((Token::Comment(comment.into()), start_pos));
                 }
             }
 
@@ -2001,14 +1978,14 @@ fn get_identifier(
         ));
     }
 
-    Some((Token::Identifier(identifier), start_pos))
+    Some((Token::Identifier(identifier.into()), start_pos))
 }
 
 /// Is this keyword allowed as a function?
 #[inline]
 #[must_use]
-pub fn is_keyword_function(name: &str) -> bool {
-    match name {
+pub fn is_keyword_function(name: impl AsRef<str>) -> bool {
+    match name.as_ref() {
         KEYWORD_PRINT | KEYWORD_DEBUG | KEYWORD_TYPE_OF | KEYWORD_EVAL | KEYWORD_FN_PTR
         | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_DEF_VAR => true,
 
@@ -2040,8 +2017,8 @@ pub fn is_valid_identifier(name: impl Iterator<Item = char>) -> bool {
 /// Is a text string a valid scripted function name?
 #[inline(always)]
 #[must_use]
-pub fn is_valid_function_name(name: &str) -> bool {
-    is_valid_identifier(name.chars())
+pub fn is_valid_function_name(name: impl AsRef<str>) -> bool {
+    is_valid_identifier(name.as_ref().chars())
 }
 
 /// Is a character valid to start an identifier?
@@ -2138,10 +2115,6 @@ impl InputStream for MultiInputsStream<'_> {
 
 /// _(internals)_ An iterator on a [`Token`] stream.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 pub struct TokenIterator<'a> {
     /// Reference to the scripting `Engine`.
     pub engine: &'a Engine,
@@ -2185,29 +2158,29 @@ impl<'a> Iterator for TokenIterator<'a> {
             }
             // Reserved keyword/symbol
             Some((Token::Reserved(s), pos)) => (match
-                (s.as_str(), self.engine.custom_keywords.contains_key(s.as_str()))
+                (&*s, self.engine.custom_keywords.contains_key(&*s))
             {
-                ("===", false) => Token::LexError(LERR::ImproperSymbol(s,
+                ("===", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'===' is not a valid operator. This is not JavaScript! Should it be '=='?".to_string(),
                 )),
-                ("!==", false) => Token::LexError(LERR::ImproperSymbol(s,
+                ("!==", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'!==' is not a valid operator. This is not JavaScript! Should it be '!='?".to_string(),
                 )),
-                ("->", false) => Token::LexError(LERR::ImproperSymbol(s,
+                ("->", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'->' is not a valid symbol. This is not C or C++!".to_string())),
-                ("<-", false) => Token::LexError(LERR::ImproperSymbol(s,
+                ("<-", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'<-' is not a valid symbol. This is not Go! Should it be '<='?".to_string(),
                 )),
-                (":=", false) => Token::LexError(LERR::ImproperSymbol(s,
+                (":=", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "':=' is not a valid assignment operator. This is not Go or Pascal! Should it be simply '='?".to_string(),
                 )),
-                ("::<", false) => Token::LexError(LERR::ImproperSymbol(s,
+                ("::<", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'::<>' is not a valid symbol. This is not Rust! Should it be '::'?".to_string(),
                 )),
-                ("(*", false) | ("*)", false) => Token::LexError(LERR::ImproperSymbol(s,
+                ("(*", false) | ("*)", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'(* .. *)' is not a valid comment format. This is not Pascal! Should it be '/* .. */'?".to_string(),
                 )),
-                ("#", false) => Token::LexError(LERR::ImproperSymbol(s,
+                ("#", false) => Token::LexError(LERR::ImproperSymbol(s.to_string(),
                     "'#' is not a valid symbol. Should it be '#{'?".to_string(),
                 )),
                 // Reserved keyword/operator that is custom.
@@ -2215,23 +2188,23 @@ impl<'a> Iterator for TokenIterator<'a> {
                 // Reserved operator that is not custom.
                 (token, false) if !is_valid_identifier(token.chars()) => {
                     let msg = format!("'{}' is a reserved symbol", token);
-                    Token::LexError(LERR::ImproperSymbol(s, msg))
+                    Token::LexError(LERR::ImproperSymbol(s.to_string(), msg))
                 },
                 // Reserved keyword that is not custom and disabled.
                 (token, false) if self.engine.disabled_symbols.contains(token) => {
                     let msg = format!("reserved symbol '{}' is disabled", token);
-                    Token::LexError(LERR::ImproperSymbol(s, msg))
+                    Token::LexError(LERR::ImproperSymbol(s.to_string(), msg))
                 },
                 // Reserved keyword/operator that is not custom.
                 (_, false) => Token::Reserved(s),
             }, pos),
             // Custom keyword
-            Some((Token::Identifier(s), pos)) if self.engine.custom_keywords.contains_key(s.as_str()) => {
+            Some((Token::Identifier(s), pos)) if self.engine.custom_keywords.contains_key(&*s) => {
                 (Token::Custom(s), pos)
             }
             // Custom standard keyword/symbol - must be disabled
-            Some((token, pos)) if self.engine.custom_keywords.contains_key(token.syntax().as_ref()) => {
-                if self.engine.disabled_symbols.contains(token.syntax().as_ref()) {
+            Some((token, pos)) if self.engine.custom_keywords.contains_key(&*token.syntax()) => {
+                if self.engine.disabled_symbols.contains(&*token.syntax()) {
                     // Disabled standard keyword/symbol
                     (Token::Custom(token.syntax().into()), pos)
                 } else {
@@ -2240,7 +2213,7 @@ impl<'a> Iterator for TokenIterator<'a> {
                 }
             }
             // Disabled symbol
-            Some((token, pos)) if self.engine.disabled_symbols.contains(token.syntax().as_ref()) => {
+            Some((token, pos)) if self.engine.disabled_symbols.contains(&*token.syntax()) => {
                 (Token::Reserved(token.syntax().into()), pos)
             }
             // Normal symbol
@@ -2268,7 +2241,7 @@ impl Engine {
     #[must_use]
     pub fn lex<'a>(
         &'a self,
-        input: impl IntoIterator<Item = &'a &'a str>,
+        input: impl IntoIterator<Item = &'a (impl AsRef<str> + 'a)>,
     ) -> (TokenIterator<'a>, TokenizerControl) {
         self.lex_raw(input, None)
     }
@@ -2279,7 +2252,7 @@ impl Engine {
     #[must_use]
     pub fn lex_with_map<'a>(
         &'a self,
-        input: impl IntoIterator<Item = &'a &'a str>,
+        input: impl IntoIterator<Item = &'a (impl AsRef<str> + 'a)>,
         token_mapper: &'a OnParseTokenCallback,
     ) -> (TokenIterator<'a>, TokenizerControl) {
         self.lex_raw(input, Some(token_mapper))
@@ -2289,7 +2262,7 @@ impl Engine {
     #[must_use]
     pub(crate) fn lex_raw<'a>(
         &'a self,
-        input: impl IntoIterator<Item = &'a &'a str>,
+        input: impl IntoIterator<Item = &'a (impl AsRef<str> + 'a)>,
         token_mapper: Option<&'a OnParseTokenCallback>,
     ) -> (TokenIterator<'a>, TokenizerControl) {
         let buffer: TokenizerControl = Cell::new(TokenizerControlBlock::new()).into();
@@ -2312,7 +2285,10 @@ impl Engine {
                 tokenizer_control: buffer,
                 stream: MultiInputsStream {
                     buf: None,
-                    streams: input.into_iter().map(|s| s.chars().peekable()).collect(),
+                    streams: input
+                        .into_iter()
+                        .map(|s| s.as_ref().chars().peekable())
+                        .collect(),
                     index: 0,
                 },
                 token_mapper,

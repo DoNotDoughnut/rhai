@@ -15,20 +15,15 @@ fn check_struct_sizes() {
 
     assert_eq!(size_of::<Dynamic>(), if PACKED { 8 } else { 16 });
     assert_eq!(size_of::<Option<Dynamic>>(), if PACKED { 8 } else { 16 });
-    #[cfg(not(feature = "no_position"))]
-    assert_eq!(size_of::<Position>(), 4);
+    assert_eq!(
+        size_of::<Position>(),
+        if cfg!(feature = "no_position") { 0 } else { 4 }
+    );
     assert_eq!(size_of::<ast::Expr>(), 16);
     assert_eq!(size_of::<Option<ast::Expr>>(), 16);
     assert_eq!(size_of::<ast::Stmt>(), 32);
     assert_eq!(size_of::<Option<ast::Stmt>>(), 32);
-    assert_eq!(
-        size_of::<FnPtr>(),
-        if cfg!(feature = "no_smartstring") {
-            64
-        } else {
-            80
-        }
-    );
+    assert_eq!(size_of::<FnPtr>(), 80);
     assert_eq!(size_of::<Scope>(), 464);
     assert_eq!(size_of::<LexError>(), 56);
     assert_eq!(

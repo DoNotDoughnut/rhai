@@ -1,10 +1,9 @@
 //! Module defining the AST (abstract syntax tree).
 
 use crate::calc_fn_hash;
-use crate::dynamic::Union;
-use crate::fn_native::shared_make_mut;
 use crate::module::NamespaceRef;
-use crate::token::Token;
+use crate::tokenizer::Token;
+use crate::types::dynamic::Union;
 use crate::{
     Dynamic, FnNamespace, Identifier, ImmutableString, Module, Position, Shared, StaticVec, INT,
 };
@@ -45,10 +44,6 @@ pub enum FnAccess {
 
 /// _(internals)_ A type containing information on a scripted function.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone)]
 pub struct ScriptFnDef {
     /// Function body.
@@ -66,18 +61,10 @@ pub struct ScriptFnDef {
     pub access: FnAccess,
     /// Names of function parameters.
     pub params: StaticVec<Identifier>,
-    /// Access to external variables.
-    ///
-    /// Not available under `no_closure`.
-    #[cfg(not(feature = "no_closure"))]
-    pub externals: std::collections::BTreeSet<Identifier>,
     /// _(metadata)_ Function doc-comments (if any).
     /// Exported under the `metadata` feature only.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
-    pub comments: StaticVec<String>,
+    pub comments: Option<Box<[Box<str>]>>,
 }
 
 impl fmt::Display for ScriptFnDef {
@@ -110,15 +97,12 @@ pub struct ScriptFnMetadata<'a> {
     /// _(metadata)_ Function doc-comments (if any).
     /// Exported under the `metadata` feature only.
     ///
-    /// Not available under `no_function`.
-    ///
     /// Block doc-comments are kept in a single string slice with line-breaks within.
     ///
     /// Line doc-comments are kept in one string slice per line without the termination line-break.
     ///
     /// Leading white-spaces are stripped, and each string slice always starts with the corresponding
     /// doc-comment leader: `///` or `/**`.
-    #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
     pub comments: Vec<&'a str>,
     /// Function access mode.
@@ -156,7 +140,10 @@ impl<'a> From<&'a ScriptFnDef> for ScriptFnMetadata<'a> {
         Self {
             #[cfg(not(feature = "no_function"))]
             #[cfg(feature = "metadata")]
-            comments: value.comments.iter().map(|s| s.as_str()).collect(),
+            comments: value
+                .comments
+                .as_ref()
+                .map_or_else(|| Vec::new(), |v| v.iter().map(Box::as_ref).collect()),
             access: value.access,
             name: &value.name,
             params: value.params.iter().map(|s| s.as_str()).collect(),
@@ -193,10 +180,9 @@ pub struct AST {
     /// Global statements.
     body: StmtBlock,
     /// Script-defined functions.
+    #[cfg(not(feature = "no_function"))]
     functions: Shared<Module>,
     /// Embedded module resolver, if any.
-    ///
-    /// Not available under `no_module`.
     #[cfg(not(feature = "no_module"))]
     resolver: Option<Shared<crate::module::resolvers::StaticModuleResolver>>,
 }
@@ -210,19 +196,74 @@ impl Default for AST {
 
 impl AST {
     /// Create a new [`AST`].
-    #[inline]
+    #[cfg(not(feature = "internals"))]
+    #[inline(always)]
     #[must_use]
-    pub fn new(
+    pub(crate) fn new(
         statements: impl IntoIterator<Item = Stmt>,
-        functions: impl Into<Shared<Module>>,
+        #[cfg(not(feature = "no_function"))] functions: impl Into<Shared<Module>>,
     ) -> Self {
         Self {
             source: None,
             body: StmtBlock::new(statements, Position::NONE),
+            #[cfg(not(feature = "no_function"))]
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
         }
+    }
+    /// _(internals)_ Create a new [`AST`].
+    /// Exported under the `internals` feature only.
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    #[must_use]
+    pub fn new(
+        statements: impl IntoIterator<Item = Stmt>,
+        #[cfg(not(feature = "no_function"))] functions: impl Into<Shared<Module>>,
+    ) -> Self {
+        Self {
+            source: None,
+            body: StmtBlock::new(statements, Position::NONE),
+            #[cfg(not(feature = "no_function"))]
+            functions: functions.into(),
+            #[cfg(not(feature = "no_module"))]
+            resolver: None,
+        }
+    }
+    /// Create a new [`AST`] with a source name.
+    #[cfg(not(feature = "internals"))]
+    #[inline(always)]
+    #[must_use]
+    pub(crate) fn new_with_source(
+        statements: impl IntoIterator<Item = Stmt>,
+        #[cfg(not(feature = "no_function"))] functions: impl Into<Shared<Module>>,
+        source: impl Into<Identifier>,
+    ) -> Self {
+        let mut ast = Self::new(
+            statements,
+            #[cfg(not(feature = "no_function"))]
+            functions,
+        );
+        ast.set_source(source);
+        ast
+    }
+    /// _(internals)_ Create a new [`AST`] with a source name.
+    /// Exported under the `internals` feature only.
+    #[cfg(feature = "internals")]
+    #[inline(always)]
+    #[must_use]
+    pub fn new_with_source(
+        statements: impl IntoIterator<Item = Stmt>,
+        #[cfg(not(feature = "no_function"))] functions: impl Into<Shared<Module>>,
+        source: impl Into<Identifier>,
+    ) -> Self {
+        let mut ast = Self::new(
+            statements,
+            #[cfg(not(feature = "no_function"))]
+            functions,
+        );
+        ast.set_source(source);
+        ast
     }
     /// Create an empty [`AST`].
     #[inline]
@@ -230,24 +271,9 @@ impl AST {
     pub fn empty() -> Self {
         Self {
             source: None,
-            body: StmtBlock::empty(),
+            body: StmtBlock::NONE,
+            #[cfg(not(feature = "no_function"))]
             functions: Module::new().into(),
-            #[cfg(not(feature = "no_module"))]
-            resolver: None,
-        }
-    }
-    /// Create a new [`AST`] with a source name.
-    #[inline(always)]
-    #[must_use]
-    pub fn new_with_source(
-        statements: impl IntoIterator<Item = Stmt>,
-        functions: impl Into<Shared<Module>>,
-        source: impl Into<Identifier>,
-    ) -> Self {
-        Self {
-            source: Some(source.into()),
-            body: StmtBlock::new(statements, Position::NONE),
-            functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: None,
         }
@@ -268,6 +294,7 @@ impl AST {
     #[inline]
     pub fn set_source(&mut self, source: impl Into<Identifier>) -> &mut Self {
         let source = source.into();
+        #[cfg(not(feature = "no_function"))]
         Shared::get_mut(&mut self.functions)
             .as_mut()
             .map(|m| m.set_id(source.clone()));
@@ -290,79 +317,66 @@ impl AST {
     /// _(internals)_ Get the statements.
     /// Exported under the `internals` feature only.
     #[cfg(feature = "internals")]
-    #[deprecated = "this method is volatile and may change"]
     #[inline(always)]
     #[must_use]
     pub fn statements(&self) -> &[Stmt] {
         &self.body.0
     }
     /// Get a mutable reference to the statements.
-    #[cfg(not(feature = "no_optimize"))]
+    #[allow(dead_code)]
     #[inline(always)]
     #[must_use]
     pub(crate) fn statements_mut(&mut self) -> &mut StaticVec<Stmt> {
         &mut self.body.0
     }
-    /// Get the internal shared [`Module`] containing all script-defined functions.
-    #[cfg(not(feature = "internals"))]
-    #[cfg(not(feature = "no_module"))]
+    /// Does this [`AST`] contain script-defined functions?
+    ///
+    /// Not available under `no_function`.
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     #[must_use]
-    pub(crate) fn shared_lib(&self) -> Shared<Module> {
-        self.functions.clone()
+    pub fn has_functions(&self) -> bool {
+        !self.functions.is_empty()
+    }
+    /// Get the internal shared [`Module`] containing all script-defined functions.
+    #[cfg(not(feature = "internals"))]
+    #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
+    #[must_use]
+    pub(crate) fn shared_lib(&self) -> &Shared<Module> {
+        &self.functions
     }
     /// _(internals)_ Get the internal shared [`Module`] containing all script-defined functions.
     /// Exported under the `internals` feature only.
     ///
-    /// Not available under `no_function` or `no_module`.
+    /// Not available under `no_function`.
     #[cfg(feature = "internals")]
-    #[deprecated = "this method is volatile and may change"]
-    #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_function"))]
     #[inline(always)]
     #[must_use]
-    pub fn shared_lib(&self) -> Shared<Module> {
-        self.functions.clone()
-    }
-    /// Get the internal [`Module`] containing all script-defined functions.
-    #[cfg(not(feature = "internals"))]
-    #[inline(always)]
-    #[must_use]
-    pub(crate) fn lib(&self) -> &Module {
-        &self.functions
-    }
-    /// _(internals)_ Get the internal [`Module`] containing all script-defined functions.
-    /// Exported under the `internals` feature only.
-    ///
-    /// Not available under `no_function`.
-    #[cfg(feature = "internals")]
-    #[deprecated = "this method is volatile and may change"]
-    #[inline(always)]
-    #[must_use]
-    pub fn lib(&self) -> &Module {
+    pub fn shared_lib(&self) -> &Shared<Module> {
         &self.functions
     }
     /// Get the embedded [module resolver][`ModuleResolver`].
-    #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "internals"))]
+    #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[must_use]
     pub(crate) fn resolver(
         &self,
-    ) -> Option<Shared<crate::module::resolvers::StaticModuleResolver>> {
-        self.resolver.clone()
+    ) -> Option<&Shared<crate::module::resolvers::StaticModuleResolver>> {
+        self.resolver.as_ref()
     }
     /// _(internals)_ Get the embedded [module resolver][crate::ModuleResolver].
     /// Exported under the `internals` feature only.
     ///
     /// Not available under `no_module`.
-    #[cfg(not(feature = "no_module"))]
     #[cfg(feature = "internals")]
+    #[cfg(not(feature = "no_module"))]
     #[inline(always)]
     #[must_use]
-    pub fn resolver(&self) -> Option<Shared<crate::module::resolvers::StaticModuleResolver>> {
-        self.resolver.clone()
+    pub fn resolver(&self) -> Option<&Shared<crate::module::resolvers::StaticModuleResolver>> {
+        self.resolver.as_ref()
     }
     /// Set the embedded [module resolver][`ModuleResolver`].
     #[cfg(not(feature = "no_module"))]
@@ -403,7 +417,7 @@ impl AST {
         functions.merge_filtered(&self.functions, &filter);
         Self {
             source: self.source.clone(),
-            body: StmtBlock::empty(),
+            body: StmtBlock::NONE,
             functions: functions.into(),
             #[cfg(not(feature = "no_module"))]
             resolver: self.resolver.clone(),
@@ -417,6 +431,7 @@ impl AST {
         Self {
             source: self.source.clone(),
             body: self.body.clone(),
+            #[cfg(not(feature = "no_function"))]
             functions: Module::new().into(),
             #[cfg(not(feature = "no_module"))]
             resolver: self.resolver.clone(),
@@ -474,7 +489,7 @@ impl AST {
     #[inline(always)]
     #[must_use]
     pub fn merge(&self, other: &Self) -> Self {
-        self.merge_filtered(other, |_, _, _, _, _| true)
+        self.merge_filtered_impl(other, |_, _, _, _, _| true)
     }
     /// Combine one [`AST`] with another.  The second [`AST`] is consumed.
     ///
@@ -526,10 +541,12 @@ impl AST {
     /// ```
     #[inline(always)]
     pub fn combine(&mut self, other: Self) -> &mut Self {
-        self.combine_filtered(other, |_, _, _, _, _| true)
+        self.combine_filtered_impl(other, |_, _, _, _, _| true)
     }
     /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged, version
     /// is returned.
+    ///
+    /// Not available under `no_function`.
     ///
     /// Statements in the second [`AST`] are simply appended to the end of the first _without any processing_.
     /// Thus, the return value of the first [`AST`] (if using expression-statement syntax) is buried.
@@ -544,8 +561,6 @@ impl AST {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # #[cfg(not(feature = "no_function"))]
-    /// # {
     /// use rhai::Engine;
     ///
     /// let engine = Engine::new();
@@ -576,44 +591,66 @@ impl AST {
     ///
     /// // Evaluate it
     /// assert_eq!(engine.eval_ast::<String>(&ast)?, "42!");
-    /// # }
     /// # Ok(())
     /// # }
     /// ```
-    #[inline]
+    #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
     #[must_use]
     pub fn merge_filtered(
         &self,
         other: &Self,
         filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> Self {
-        let Self {
-            body, functions, ..
-        } = self;
-
-        let merged = match (body.is_empty(), other.body.is_empty()) {
+        self.merge_filtered_impl(other, filter)
+    }
+    /// Merge two [`AST`] into one.  Both [`AST`]'s are untouched and a new, merged, version
+    /// is returned.
+    #[inline]
+    #[must_use]
+    fn merge_filtered_impl(
+        &self,
+        other: &Self,
+        _filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
+    ) -> Self {
+        let merged = match (self.body.is_empty(), other.body.is_empty()) {
             (false, false) => {
-                let mut body = body.clone();
+                let mut body = self.body.clone();
                 body.0.extend(other.body.0.iter().cloned());
                 body
             }
-            (false, true) => body.clone(),
+            (false, true) => self.body.clone(),
             (true, false) => other.body.clone(),
-            (true, true) => StmtBlock::empty(),
+            (true, true) => StmtBlock::NONE,
         };
 
         let source = other.source.clone().or_else(|| self.source.clone());
 
-        let mut functions = functions.as_ref().clone();
-        functions.merge_filtered(&other.functions, &filter);
+        #[cfg(not(feature = "no_function"))]
+        let functions = {
+            let mut functions = self.functions.as_ref().clone();
+            functions.merge_filtered(&other.functions, &_filter);
+            functions
+        };
 
         if let Some(source) = source {
-            Self::new_with_source(merged.0, functions, source)
+            Self::new_with_source(
+                merged.0,
+                #[cfg(not(feature = "no_function"))]
+                functions,
+                source,
+            )
         } else {
-            Self::new(merged.0, functions)
+            Self::new(
+                merged.0,
+                #[cfg(not(feature = "no_function"))]
+                functions,
+            )
         }
     }
     /// Combine one [`AST`] with another.  The second [`AST`] is consumed.
+    ///
+    /// Not available under `no_function`.
     ///
     /// Statements in the second [`AST`] are simply appended to the end of the first _without any processing_.
     /// Thus, the return value of the first [`AST`] (if using expression-statement syntax) is buried.
@@ -628,8 +665,6 @@ impl AST {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// # #[cfg(not(feature = "no_function"))]
-    /// # {
     /// use rhai::Engine;
     ///
     /// let engine = Engine::new();
@@ -660,20 +695,31 @@ impl AST {
     ///
     /// // Evaluate it
     /// assert_eq!(engine.eval_ast::<String>(&ast1)?, "42!");
-    /// # }
     /// # Ok(())
     /// # }
     /// ```
-    #[inline]
+    #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
     pub fn combine_filtered(
         &mut self,
         other: Self,
         filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
     ) -> &mut Self {
+        self.combine_filtered_impl(other, filter)
+    }
+    /// Combine one [`AST`] with another.  The second [`AST`] is consumed.
+    #[inline]
+    fn combine_filtered_impl(
+        &mut self,
+        other: Self,
+        _filter: impl Fn(FnNamespace, FnAccess, bool, &str, usize) -> bool,
+    ) -> &mut Self {
         self.body.0.extend(other.body.0.into_iter());
 
+        #[cfg(not(feature = "no_function"))]
         if !other.functions.is_empty() {
-            shared_make_mut(&mut self.functions).merge_filtered(&other.functions, &filter);
+            crate::func::native::shared_make_mut(&mut self.functions)
+                .merge_filtered(&other.functions, &_filter);
         }
         self
     }
@@ -709,7 +755,8 @@ impl AST {
         filter: impl Fn(FnNamespace, FnAccess, &str, usize) -> bool,
     ) -> &mut Self {
         if !self.functions.is_empty() {
-            shared_make_mut(&mut self.functions).retain_script_functions(filter);
+            crate::func::native::shared_make_mut(&mut self.functions)
+                .retain_script_functions(filter);
         }
         self
     }
@@ -746,8 +793,91 @@ impl AST {
     /// Clear all statements in the [`AST`], leaving only function definitions.
     #[inline(always)]
     pub fn clear_statements(&mut self) -> &mut Self {
-        self.body = StmtBlock::empty();
+        self.body = StmtBlock::NONE;
         self
+    }
+    /// Extract all top-level literal constant and/or variable definitions.
+    /// This is useful for extracting all global constants from a script without actually running it.
+    ///
+    /// A literal constant/variable definition takes the form of:
+    /// `const VAR = `_value_`;` and `let VAR = `_value_`;`
+    /// where _value_ is a literal expression or will be optimized into a literal.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
+    /// use rhai::{Engine, Scope};
+    ///
+    /// let engine = Engine::new();
+    ///
+    /// let ast = engine.compile(
+    /// "
+    ///     const A = 40 + 2;   // constant that optimizes into a literal
+    ///     let b = 123;        // literal variable
+    ///     const B = b * A;    // non-literal constant
+    ///     const C = 999;      // literal constant
+    ///     b = A + C;          // expression
+    ///
+    ///     {                   // <- new block scope
+    ///         const Z = 0;    // <- literal constant not at top-level
+    ///     }
+    /// ")?;
+    ///
+    /// let mut iter = ast.iter_literal_variables(true, false)
+    ///                   .map(|(name, is_const, value)| (name, is_const, value.as_int().unwrap()));
+    ///
+    /// # #[cfg(not(feature = "no_optimize"))]
+    /// assert_eq!(iter.next(), Some(("A", true, 42)));
+    /// assert_eq!(iter.next(), Some(("C", true, 999)));
+    /// assert_eq!(iter.next(), None);
+    ///
+    /// let mut iter = ast.iter_literal_variables(false, true)
+    ///                   .map(|(name, is_const, value)| (name, is_const, value.as_int().unwrap()));
+    ///
+    /// assert_eq!(iter.next(), Some(("b", false, 123)));
+    /// assert_eq!(iter.next(), None);
+    ///
+    /// let mut iter = ast.iter_literal_variables(true, true)
+    ///                   .map(|(name, is_const, value)| (name, is_const, value.as_int().unwrap()));
+    ///
+    /// # #[cfg(not(feature = "no_optimize"))]
+    /// assert_eq!(iter.next(), Some(("A", true, 42)));
+    /// assert_eq!(iter.next(), Some(("b", false, 123)));
+    /// assert_eq!(iter.next(), Some(("C", true, 999)));
+    /// assert_eq!(iter.next(), None);
+    ///
+    /// let scope: Scope = ast.iter_literal_variables(true, false).collect();
+    ///
+    /// # #[cfg(not(feature = "no_optimize"))]
+    /// assert_eq!(scope.len(), 2);
+    ///
+    /// Ok(())
+    /// # }
+    /// ```
+    pub fn iter_literal_variables(
+        &self,
+        include_constants: bool,
+        include_variables: bool,
+    ) -> impl Iterator<Item = (&str, bool, Dynamic)> {
+        self.statements().iter().filter_map(move |stmt| match stmt {
+            Stmt::Var(expr, name, options, _)
+                if options.contains(AST_OPTION_FLAGS::AST_OPTION_CONSTANT) && include_constants
+                    || !options.contains(AST_OPTION_FLAGS::AST_OPTION_CONSTANT)
+                        && include_variables =>
+            {
+                if let Some(value) = expr.get_literal_value() {
+                    Some((
+                        name.as_str(),
+                        options.contains(AST_OPTION_FLAGS::AST_OPTION_CONSTANT),
+                        value,
+                    ))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
     }
     /// Recursively walk the [`AST`], including function bodies (if any).
     /// Return `false` from the callback to terminate the walk.
@@ -818,24 +948,29 @@ impl AsRef<[Stmt]> for AST {
     }
 }
 
+#[cfg(not(feature = "no_function"))]
 impl AsRef<Module> for AST {
     #[inline(always)]
     fn as_ref(&self) -> &Module {
-        self.lib()
+        self.shared_lib().as_ref()
+    }
+}
+
+#[cfg(not(feature = "no_function"))]
+impl AsRef<Shared<Module>> for AST {
+    #[inline(always)]
+    fn as_ref(&self) -> &Shared<Module> {
+        self.shared_lib()
     }
 }
 
 /// _(internals)_ An identifier containing a name and a [position][Position].
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Ident {
     /// Identifier name.
     pub name: Identifier,
-    /// Declaration position.
+    /// Position.
     pub pos: Position,
 }
 
@@ -846,12 +981,22 @@ impl fmt::Debug for Ident {
     }
 }
 
+impl AsRef<str> for Ident {
+    #[inline(always)]
+    fn as_ref(&self) -> &str {
+        self.name.as_ref()
+    }
+}
+
+impl Ident {
+    #[inline(always)]
+    pub fn as_str(&self) -> &str {
+        self.name.as_str()
+    }
+}
+
 /// _(internals)_ An [`AST`] node, consisting of either an [`Expr`] or a [`Stmt`].
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
 pub enum ASTNode<'a> {
     /// A statement ([`Stmt`]).
@@ -884,14 +1029,13 @@ impl ASTNode<'_> {
 
 /// _(internals)_ A scoped block of statements.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Clone, Hash, Default)]
 pub struct StmtBlock(StaticVec<Stmt>, Position);
 
 impl StmtBlock {
+    /// A [`StmtBlock`] that does not exist.
+    pub const NONE: Self = Self::empty(Position::NONE);
+
     /// Create a new [`StmtBlock`].
     #[must_use]
     pub fn new(statements: impl IntoIterator<Item = Stmt>, pos: Position) -> Self {
@@ -902,8 +1046,8 @@ impl StmtBlock {
     /// Create an empty [`StmtBlock`].
     #[inline(always)]
     #[must_use]
-    pub fn empty() -> Self {
-        Default::default()
+    pub const fn empty(pos: Position) -> Self {
+        Self(StaticVec::new_const(), pos)
     }
     /// Is this statements block empty?
     #[inline(always)]
@@ -1114,10 +1258,6 @@ pub mod AST_OPTION_FLAGS {
 
 /// _(internals)_ A statement.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
 pub enum Stmt {
     /// No-op.
@@ -1211,7 +1351,7 @@ impl From<Stmt> for StmtBlock {
     fn from(stmt: Stmt) -> Self {
         match stmt {
             Stmt::Block(mut block, pos) => Self(block.iter_mut().map(mem::take).collect(), pos),
-            Stmt::Noop(pos) => Self(StaticVec::new(), pos),
+            Stmt::Noop(pos) => Self(StaticVec::new_const(), pos),
             _ => {
                 let pos = stmt.position();
                 Self(vec![stmt].into(), pos)
@@ -1404,7 +1544,7 @@ impl Stmt {
     ///
     /// An internally pure statement only has side effects that disappear outside the block.
     ///
-    /// Currently only variable declarations (i.e. `let` and `const`) and `import`/`export`
+    /// Currently only variable definitions (i.e. `let` and `const`) and `import`/`export`
     /// statements are internally pure.
     #[inline]
     #[must_use]
@@ -1556,7 +1696,7 @@ impl Stmt {
             _ => (),
         }
 
-        path.pop().expect("`path` contains current node");
+        path.pop().expect("contains current node");
 
         true
     }
@@ -1564,19 +1704,15 @@ impl Stmt {
 
 /// _(internals)_ A custom syntax expression.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Hash)]
 pub struct CustomExpr {
     /// List of keywords.
     pub inputs: StaticVec<Expr>,
+    /// List of tokens actually parsed.
+    pub tokens: StaticVec<Identifier>,
     /// Is the current [`Scope`][crate::Scope] possibly modified by this custom statement
     /// (e.g. introducing a new variable)?
     pub scope_may_be_changed: bool,
-    /// List of tokens actually parsed.
-    pub tokens: StaticVec<Identifier>,
     /// Is this custom syntax self-terminated?
     pub self_terminated: bool,
 }
@@ -1594,11 +1730,7 @@ impl CustomExpr {
 
 /// _(internals)_ A binary expression.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
-#[derive(Clone, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub struct BinaryExpr {
     /// LHS expression.
     pub lhs: Expr,
@@ -1608,15 +1740,11 @@ pub struct BinaryExpr {
 
 /// _(internals)_ An op-assignment operator.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct OpAssignment<'a> {
     /// Hash of the op-assignment call.
     pub hash_op_assign: u64,
-    /// Hash of the underlying operator call.
+    /// Hash of the underlying operator call (for fallback).
     pub hash_op: u64,
     /// Op-assignment operator.
     pub op: &'a str,
@@ -1632,7 +1760,7 @@ impl OpAssignment<'_> {
     pub fn new(op: Token) -> Self {
         let op_raw = op
             .map_op_assignment()
-            .expect("token is op-assignment operator")
+            .expect("op-assignment")
             .literal_syntax();
         let op_assignment = op.literal_syntax();
 
@@ -1644,38 +1772,35 @@ impl OpAssignment<'_> {
     }
 }
 
-/// _(internals)_ An set of function call hashes.
-/// Exported under the `internals` feature only.
+/// _(internals)_ A set of function call hashes. Exported under the `internals` feature only.
 ///
-/// Two separate hashes are pre-calculated because of the following pattern:
+/// Two separate hashes are pre-calculated because of the following patterns:
 ///
 /// ```ignore
-/// func(a, b, c);      // Native: func(a, b, c) - 3 parameters
-///                     // Script: func(a, b, c) - 3 parameters
+/// func(a, b, c);      // Native: func(a, b, c)        - 3 parameters
+///                     // Script: func(a, b, c)        - 3 parameters
 ///
-/// a.func(b, c);       // Native: func(&mut a, b, c) - 3 parameters
-///                     // Script: func(b, c) - 2 parameters
+/// a.func(b, c);       // Native: func(&mut a, b, c)   - 3 parameters
+///                     // Script: func(b, c)           - 2 parameters
 /// ```
 ///
 /// For normal function calls, the native hash equals the script hash.
+///
 /// For method-style calls, the script hash contains one fewer parameter.
 ///
 /// Function call hashes are used in the following manner:
 ///
 /// * First, the script hash is tried, which contains only the called function's name plus the
-///   of parameters.
+///   number of parameters.
 ///
 /// * Next, the actual types of arguments are hashed and _combined_ with the native hash, which is
-///   then used to search for a native function.
-///   In other words, a native function call hash always contains the called function's name plus
-///   the types of the arguments.  This is to due to possible function overloading for different parameter types.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
+///   then used to search for a native function. In other words, a complete native function call
+///   hash always contains the called function's name plus the types of the arguments.  This is due
+///   to possible function overloading for different parameter types.
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct FnCallHashes {
     /// Pre-calculated hash for a script-defined function ([`None`] if native functions only).
+    #[cfg(not(feature = "no_function"))]
     pub script: Option<u64>,
     /// Pre-calculated hash for a native Rust function with no parameter types.
     pub native: u64,
@@ -1683,14 +1808,26 @@ pub struct FnCallHashes {
 
 impl fmt::Debug for FnCallHashes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        #[cfg(not(feature = "no_function"))]
         if let Some(script) = self.script {
-            if script == self.native {
+            return if script == self.native {
                 fmt::Debug::fmt(&self.native, f)
             } else {
                 write!(f, "({}, {})", script, self.native)
-            }
-        } else {
-            write!(f, "{} (native only)", self.native)
+            };
+        }
+
+        write!(f, "{} (native only)", self.native)
+    }
+}
+
+impl From<u64> for FnCallHashes {
+    #[inline(always)]
+    fn from(hash: u64) -> Self {
+        Self {
+            #[cfg(not(feature = "no_function"))]
+            script: Some(hash),
+            native: hash,
         }
     }
 }
@@ -1701,24 +1838,17 @@ impl FnCallHashes {
     #[must_use]
     pub const fn from_native(hash: u64) -> Self {
         Self {
+            #[cfg(not(feature = "no_function"))]
             script: None,
-            native: hash,
-        }
-    }
-    /// Create a [`FnCallHashes`] with both native Rust and script function hashes set to the same value.
-    #[inline(always)]
-    #[must_use]
-    pub const fn from_script(hash: u64) -> Self {
-        Self {
-            script: Some(hash),
             native: hash,
         }
     }
     /// Create a [`FnCallHashes`] with both native Rust and script function hashes.
     #[inline(always)]
     #[must_use]
-    pub const fn from_script_and_native(script: u64, native: u64) -> Self {
+    pub const fn from_all(#[cfg(not(feature = "no_function"))] script: u64, native: u64) -> Self {
         Self {
+            #[cfg(not(feature = "no_function"))]
             script: Some(script),
             native,
         }
@@ -1727,33 +1857,39 @@ impl FnCallHashes {
     #[inline(always)]
     #[must_use]
     pub const fn is_native_only(&self) -> bool {
-        self.script.is_none()
+        #[cfg(not(feature = "no_function"))]
+        return self.script.is_none();
+
+        #[cfg(feature = "no_function")]
+        return true;
     }
 }
 
 /// _(internals)_ A function call.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Debug, Clone, Default, Hash)]
 pub struct FnCallExpr {
     /// Namespace of the function, if any.
     pub namespace: Option<NamespaceRef>,
+    /// Function name.
+    pub name: Identifier,
     /// Pre-calculated hashes.
     pub hashes: FnCallHashes,
     /// List of function call argument expressions.
     pub args: StaticVec<Expr>,
     /// List of function call arguments that are constants.
     ///
-    /// Any arguments in `args` that is [`Expr::Stack`][Expr::Stack] indexes into this
+    /// Any arguments in `args` that is [`Expr::Stack`] indexes into this
     /// array to find the constant for use as its argument value.
-    pub constants: smallvec::SmallVec<[Dynamic; 2]>,
-    /// Function name.
-    pub name: Identifier,
+    ///
+    /// # Notes
+    ///
+    /// Constant arguments are very common in function calls, and keeping each constant in
+    /// an [`Expr::DynamicConstant`] involves an additional allocation.  Keeping the constant
+    /// values in an inlined array avoids these extra allocations.
+    pub constants: StaticVec<Dynamic>,
     /// Does this function call capture the parent scope?
-    pub capture: bool,
+    pub capture_parent_scope: bool,
 }
 
 impl FnCallExpr {
@@ -1763,7 +1899,7 @@ impl FnCallExpr {
     pub const fn is_qualified(&self) -> bool {
         self.namespace.is_some()
     }
-    /// Convert this into a [`FnCall`][Expr::FnCall].
+    /// Convert this into an [`Expr::FnCall`].
     #[inline(always)]
     #[must_use]
     pub fn into_fn_call_expr(self, pos: Position) -> Expr {
@@ -1832,7 +1968,7 @@ impl<F: Float + fmt::Debug> fmt::Debug for FloatWrapper<F> {
 impl<F: Float + fmt::Display + fmt::LowerExp + From<f32>> fmt::Display for FloatWrapper<F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let abs = self.0.abs();
-        if abs.fract().is_zero() {
+        if abs.is_zero() {
             f.write_str("0.0")
         } else if abs > Self::MAX_NATURAL_FLOAT_FOR_DISPLAY.into()
             || abs < Self::MIN_NATURAL_FLOAT_FOR_DISPLAY.into()
@@ -1894,15 +2030,12 @@ impl FloatWrapper<FLOAT> {
 
 /// _(internals)_ An expression sub-tree.
 /// Exported under the `internals` feature only.
-///
-/// # Volatile Data Structure
-///
-/// This type is volatile and may change.
 #[derive(Clone, Hash)]
 pub enum Expr {
     /// Dynamic constant.
-    /// Used to hold either an [`Array`] or [`Map`][crate::Map] literal for quick cloning.
-    /// All other primitive data types should use the appropriate variants for better speed.
+    ///
+    /// Used to hold complex constants such as [`Array`] or [`Map`][crate::Map] for quick cloning.
+    /// Primitive data types should use the appropriate variants to avoid an allocation.
     DynamicConstant(Box<Dynamic>, Position),
     /// Boolean constant.
     BoolConstant(bool, Position),
@@ -1950,13 +2083,11 @@ pub enum Expr {
             (ImmutableString, Position),
         )>,
     ),
-    /// Stack slot
+    /// Stack slot for function calls.  See [`FnCallExpr`] for more details.
     ///
-    /// # Notes
-    ///
-    /// This variant does not map to any language structure.  It is currently only used in function
-    /// calls with constant arguments where the `usize` number indexes into an array containing a
-    /// list of constant arguments for the function call.  See [`FnCallExpr`] for more details.
+    /// This variant does not map to any language structure.  It is used in function calls with
+    /// constant arguments where the `usize` number indexes into an array containing a list of
+    /// constant arguments for the function call.
     Stack(usize, Position),
     /// { [statement][Stmt] ... }
     Stmt(Box<StmtBlock>),
@@ -2035,8 +2166,8 @@ impl fmt::Debug for Expr {
                 if !x.constants.is_empty() {
                     ff.field("constants", &x.constants);
                 }
-                if x.capture {
-                    ff.field("capture", &x.capture);
+                if x.capture_parent_scope {
+                    ff.field("capture_parent_scope", &x.capture_parent_scope);
                 }
                 ff.finish()
             }
@@ -2091,23 +2222,20 @@ impl Expr {
             #[cfg(not(feature = "no_index"))]
             Self::Array(x, _) if self.is_constant() => {
                 let mut arr = Array::with_capacity(x.len());
-                arr.extend(x.iter().map(|v| {
-                    v.get_literal_value()
-                        .expect("constant array has constant value")
-                }));
+                arr.extend(
+                    x.iter()
+                        .map(|v| v.get_literal_value().expect("constant value")),
+                );
                 Dynamic::from_array(arr)
             }
 
             #[cfg(not(feature = "no_object"))]
             Self::Map(x, _) if self.is_constant() => {
-                let mut map = x.1.clone();
-                x.0.iter().for_each(|(k, v)| {
-                    *map.get_mut(k.name.as_str())
-                        .expect("template contains all keys") = v
-                        .get_literal_value()
-                        .expect("constant map has constant value")
-                });
-                Dynamic::from_map(map)
+                Dynamic::from_map(x.0.iter().fold(x.1.clone(), |mut map, (k, v)| {
+                    let value_ref = map.get_mut(k.name.as_str()).expect("contains all keys");
+                    *value_ref = v.get_literal_value().expect("constant value");
+                    map
+                }))
             }
 
             _ => return None,
@@ -2384,8 +2512,29 @@ impl Expr {
             _ => (),
         }
 
-        path.pop().expect("`path` contains current node");
+        path.pop().expect("contains current node");
 
         true
+    }
+}
+
+impl AST {
+    /// _(internals)_ Get the internal [`Module`] containing all script-defined functions.
+    /// Exported under the `internals` feature only.
+    ///
+    /// Not available under `no_function`.
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated. Use [`shared_lib`][AST::shared_lib] instead.
+    ///
+    /// This method will be removed in the next major version.
+    #[deprecated(since = "1.3.0", note = "use `shared_lib` instead")]
+    #[cfg(feature = "internals")]
+    #[cfg(not(feature = "no_function"))]
+    #[inline(always)]
+    #[must_use]
+    pub fn lib(&self) -> &crate::Module {
+        &self.functions
     }
 }

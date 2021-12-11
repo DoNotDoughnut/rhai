@@ -69,7 +69,7 @@ mod array_functions {
     }
     #[rhai_fn(return_raw)]
     pub fn pad(
-        _ctx: NativeCallContext,
+        ctx: NativeCallContext,
         array: &mut Array,
         len: INT,
         item: Dynamic,
@@ -77,6 +77,8 @@ mod array_functions {
         if len <= 0 {
             return Ok(());
         }
+
+        let _ctx = ctx;
 
         // Check if array will be over max size limit
         #[cfg(not(feature = "unchecked"))]
@@ -250,7 +252,36 @@ mod array_functions {
         array: &mut Array,
         mapper: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
-        map_with_fn_name(ctx, array, mapper.fn_name())
+        if array.is_empty() {
+            return Ok(array.clone());
+        }
+
+        let mut ar = Array::with_capacity(array.len());
+
+        for (i, item) in array.iter().enumerate() {
+            ar.push(
+                mapper
+                    .call_raw(&ctx, None, [item.clone()])
+                    .or_else(|err| match *err {
+                        EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                            if fn_sig.starts_with(mapper.fn_name()) =>
+                        {
+                            mapper.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
+                        }
+                        _ => Err(err),
+                    })
+                    .map_err(|err| {
+                        Box::new(EvalAltResult::ErrorInFunctionCall(
+                            "map".to_string(),
+                            ctx.source().unwrap_or("").to_string(),
+                            err,
+                            Position::NONE,
+                        ))
+                    })?,
+            );
+        }
+
+        Ok(ar)
     }
     #[rhai_fn(name = "map", return_raw, pure)]
     pub fn map_with_fn_name(
@@ -258,93 +289,56 @@ mod array_functions {
         array: &mut Array,
         mapper: &str,
     ) -> Result<Array, Box<EvalAltResult>> {
-        if array.is_empty() {
-            return Ok(Array::new());
-        }
-
-        let mut ar = Array::with_capacity(array.len());
-        let mut index_val = Dynamic::UNIT;
-
-        for (i, item) in array.iter_mut().enumerate() {
-            let mut args = [item, &mut index_val];
-
-            ar.push(match ctx.call_fn_raw(mapper, true, false, &mut args[..1]) {
-                Ok(r) => r,
-                Err(err) => match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(mapper) =>
-                    {
-                        *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(mapper, true, false, &mut args)?
-                    }
-                    _ => {
-                        return Err(EvalAltResult::ErrorInFunctionCall(
-                            "map".to_string(),
-                            ctx.source().unwrap_or("").to_string(),
-                            err,
-                            Position::NONE,
-                        )
-                        .into())
-                    }
-                },
-            });
-        }
-
-        Ok(ar)
+        map(ctx, array, FnPtr::new(mapper)?)
     }
+
     #[rhai_fn(return_raw, pure)]
     pub fn filter(
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
-        filter_with_fn_name(ctx, array, filter.fn_name())
-    }
-    #[rhai_fn(name = "filter", return_raw, pure)]
-    pub fn filter_with_fn_name(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: &str,
-    ) -> Result<Array, Box<EvalAltResult>> {
         if array.is_empty() {
             return Ok(array.clone());
         }
 
         let mut ar = Array::new();
-        let mut index_val = Dynamic::UNIT;
 
-        for (i, item) in array.iter_mut().enumerate() {
-            let mut args = [item, &mut index_val];
-
-            let keep = match ctx.call_fn_raw(filter, true, false, &mut args[..1]) {
-                Ok(r) => r,
-                Err(err) => match *err {
+        for (i, item) in array.iter().enumerate() {
+            if filter
+                .call_raw(&ctx, None, [item.clone()])
+                .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(filter) =>
+                        if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(filter, true, false, &mut args)?
+                        filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
                     }
-                    _ => {
-                        return Err(EvalAltResult::ErrorInFunctionCall(
-                            "filter".to_string(),
-                            ctx.source().unwrap_or("").to_string(),
-                            err,
-                            Position::NONE,
-                        )
-                        .into())
-                    }
-                },
-            }
-            .as_bool()
-            .unwrap_or(false);
-
-            if keep {
-                ar.push(args[0].clone());
+                    _ => Err(err),
+                })
+                .map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                        "filter".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
+                        err,
+                        Position::NONE,
+                    ))
+                })?
+                .as_bool()
+                .unwrap_or(false)
+            {
+                ar.push(item.clone());
             }
         }
 
         Ok(ar)
+    }
+    #[rhai_fn(name = "filter", return_raw, pure)]
+    pub fn filter_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter_func: &str,
+    ) -> Result<Array, Box<EvalAltResult>> {
+        filter(ctx, array, FnPtr::new(filter_func)?)
     }
     #[rhai_fn(return_raw, pure)]
     pub fn contains(
@@ -467,15 +461,6 @@ mod array_functions {
         filter: FnPtr,
         start: INT,
     ) -> Result<INT, Box<EvalAltResult>> {
-        index_of_with_fn_name_filter_starting_from(ctx, array, filter.fn_name(), start)
-    }
-    #[rhai_fn(name = "index_of", return_raw, pure)]
-    pub fn index_of_with_fn_name_filter_starting_from(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        filter: &str,
-        start: INT,
-    ) -> Result<INT, Box<EvalAltResult>> {
         if array.is_empty() {
             return Ok(-1);
         }
@@ -491,40 +476,42 @@ mod array_functions {
             start as usize
         };
 
-        let mut index_val = Dynamic::UNIT;
-
-        for (i, item) in array.iter_mut().enumerate().skip(start) {
-            let mut args = [item, &mut index_val];
-
-            let found = match ctx.call_fn_raw(filter, true, false, &mut args[..1]) {
-                Ok(r) => r,
-                Err(err) => match *err {
+        for (i, item) in array.iter().enumerate().skip(start) {
+            if filter
+                .call_raw(&ctx, None, [item.clone()])
+                .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(filter) =>
+                        if fn_sig.starts_with(filter.fn_name()) =>
                     {
-                        *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(filter, true, false, &mut args)?
+                        filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
                     }
-                    _ => {
-                        return Err(EvalAltResult::ErrorInFunctionCall(
-                            "index_of".to_string(),
-                            ctx.source().unwrap_or("").to_string(),
-                            err,
-                            Position::NONE,
-                        )
-                        .into())
-                    }
-                },
-            }
-            .as_bool()
-            .unwrap_or(false);
-
-            if found {
+                    _ => Err(err),
+                })
+                .map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                        "index_of".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
+                        err,
+                        Position::NONE,
+                    ))
+                })?
+                .as_bool()
+                .unwrap_or(false)
+            {
                 return Ok(i as INT);
             }
         }
 
         Ok(-1 as INT)
+    }
+    #[rhai_fn(name = "index_of", return_raw, pure)]
+    pub fn index_of_with_fn_name_filter_starting_from(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        filter: &str,
+        start: INT,
+    ) -> Result<INT, Box<EvalAltResult>> {
+        index_of_filter_starting_from(ctx, array, FnPtr::new(filter)?, start)
     }
     #[rhai_fn(return_raw, pure)]
     pub fn some(
@@ -532,7 +519,37 @@ mod array_functions {
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<bool, Box<EvalAltResult>> {
-        some_with_fn_name(ctx, array, filter.fn_name())
+        if array.is_empty() {
+            return Ok(false);
+        }
+
+        for (i, item) in array.iter().enumerate() {
+            if filter
+                .call_raw(&ctx, None, [item.clone()])
+                .or_else(|err| match *err {
+                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                        if fn_sig.starts_with(filter.fn_name()) =>
+                    {
+                        filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
+                    }
+                    _ => Err(err),
+                })
+                .map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                        "some".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
+                        err,
+                        Position::NONE,
+                    ))
+                })?
+                .as_bool()
+                .unwrap_or(false)
+            {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
     #[rhai_fn(name = "some", return_raw, pure)]
     pub fn some_with_fn_name(
@@ -540,44 +557,7 @@ mod array_functions {
         array: &mut Array,
         filter: &str,
     ) -> Result<bool, Box<EvalAltResult>> {
-        if array.is_empty() {
-            return Ok(false);
-        }
-
-        let mut index_val = Dynamic::UNIT;
-
-        for (i, item) in array.iter_mut().enumerate() {
-            let mut args = [item, &mut index_val];
-
-            let found = match ctx.call_fn_raw(filter, true, false, &mut args[..1]) {
-                Ok(r) => r,
-                Err(err) => match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(filter) =>
-                    {
-                        *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(filter, true, false, &mut args)?
-                    }
-                    _ => {
-                        return Err(EvalAltResult::ErrorInFunctionCall(
-                            "some".to_string(),
-                            ctx.source().unwrap_or("").to_string(),
-                            err,
-                            Position::NONE,
-                        )
-                        .into())
-                    }
-                },
-            }
-            .as_bool()
-            .unwrap_or(false);
-
-            if found {
-                return Ok(true);
-            }
-        }
-
-        Ok(false)
+        some(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(return_raw, pure)]
     pub fn all(
@@ -585,7 +565,37 @@ mod array_functions {
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<bool, Box<EvalAltResult>> {
-        all_with_fn_name(ctx, array, filter.fn_name())
+        if array.is_empty() {
+            return Ok(true);
+        }
+
+        for (i, item) in array.iter().enumerate() {
+            if !filter
+                .call_raw(&ctx, None, [item.clone()])
+                .or_else(|err| match *err {
+                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                        if fn_sig.starts_with(filter.fn_name()) =>
+                    {
+                        filter.call_raw(&ctx, None, [item.clone(), (i as INT).into()])
+                    }
+                    _ => Err(err),
+                })
+                .map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                        "all".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
+                        err,
+                        Position::NONE,
+                    ))
+                })?
+                .as_bool()
+                .unwrap_or(false)
+            {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
     }
     #[rhai_fn(name = "all", return_raw, pure)]
     pub fn all_with_fn_name(
@@ -593,44 +603,7 @@ mod array_functions {
         array: &mut Array,
         filter: &str,
     ) -> Result<bool, Box<EvalAltResult>> {
-        if array.is_empty() {
-            return Ok(true);
-        }
-
-        let mut index_val = Dynamic::UNIT;
-
-        for (i, item) in array.iter_mut().enumerate() {
-            let mut args = [item, &mut index_val];
-
-            let found = match ctx.call_fn_raw(filter, true, false, &mut args[..1]) {
-                Ok(r) => r,
-                Err(err) => match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(filter) =>
-                    {
-                        *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(filter, true, false, &mut args)?
-                    }
-                    _ => {
-                        return Err(EvalAltResult::ErrorInFunctionCall(
-                            "all".to_string(),
-                            ctx.source().unwrap_or("").to_string(),
-                            err,
-                            Position::NONE,
-                        )
-                        .into())
-                    }
-                },
-            }
-            .as_bool()
-            .unwrap_or(false);
-
-            if !found {
-                return Ok(false);
-            }
-        }
-
-        Ok(true)
+        all(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(return_raw)]
     pub fn dedup(ctx: NativeCallContext, array: &mut Array) -> Result<(), Box<EvalAltResult>> {
@@ -642,22 +615,13 @@ mod array_functions {
         array: &mut Array,
         comparer: FnPtr,
     ) -> Result<(), Box<EvalAltResult>> {
-        dedup_with_fn_name(ctx, array, comparer.fn_name())
-    }
-    #[rhai_fn(name = "dedup", return_raw)]
-    fn dedup_with_fn_name(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        comparer: &str,
-    ) -> Result<(), Box<EvalAltResult>> {
         if array.is_empty() {
             return Ok(());
         }
 
         array.dedup_by(|x, y| {
-            let mut args = [x, &mut y.clone()];
-
-            ctx.call_fn_raw(comparer, true, false, &mut args)
+            comparer
+                .call_raw(&ctx, None, [x.clone(), y.clone()])
                 .unwrap_or_else(|_| Dynamic::FALSE)
                 .as_bool()
                 .unwrap_or(false)
@@ -665,13 +629,21 @@ mod array_functions {
 
         Ok(())
     }
+    #[rhai_fn(name = "dedup", return_raw)]
+    fn dedup_with_fn_name(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        comparer: &str,
+    ) -> Result<(), Box<EvalAltResult>> {
+        dedup_by_comparer(ctx, array, FnPtr::new(comparer)?)
+    }
     #[rhai_fn(return_raw, pure)]
     pub fn reduce(
         ctx: NativeCallContext,
         array: &mut Array,
         reducer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        reduce_with_fn_name(ctx, array, reducer.fn_name())
+        reduce_with_initial(ctx, array, reducer, Dynamic::UNIT)
     }
     #[rhai_fn(name = "reduce", return_raw, pure)]
     pub fn reduce_with_fn_name(
@@ -679,7 +651,7 @@ mod array_functions {
         array: &mut Array,
         reducer: &str,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        reduce_with_fn_name_with_initial(ctx, array, reducer, Dynamic::UNIT)
+        reduce(ctx, array, FnPtr::new(reducer)?)
     }
     #[rhai_fn(name = "reduce", return_raw, pure)]
     pub fn reduce_with_initial(
@@ -688,34 +660,22 @@ mod array_functions {
         reducer: FnPtr,
         initial: Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        reduce_with_fn_name_with_initial(ctx, array, reducer.fn_name(), initial)
-    }
-    #[rhai_fn(name = "reduce", return_raw, pure)]
-    pub fn reduce_with_fn_name_with_initial(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        reducer: &str,
-        initial: Dynamic,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
         if array.is_empty() {
             return Ok(initial);
         }
 
         let mut result = initial;
-        let mut index_val = Dynamic::UNIT;
 
-        for (i, item) in array.iter_mut().enumerate() {
-            let mut args = [&mut result, &mut item.clone(), &mut index_val];
+        for (i, item) in array.iter().enumerate() {
+            let item = item.clone();
 
-            result = ctx
-                .call_fn_raw(reducer, true, false, &mut args[..2])
+            result = reducer
+                .call_raw(&ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(reducer) =>
+                        if fn_sig.starts_with(reducer.fn_name()) =>
                     {
-                        *args[1] = item.clone();
-                        *args[2] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(reducer, true, false, &mut args)
+                        reducer.call_raw(&ctx, None, [result, item, (i as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -731,13 +691,22 @@ mod array_functions {
 
         Ok(result)
     }
+    #[rhai_fn(name = "reduce", return_raw, pure)]
+    pub fn reduce_with_fn_name_with_initial(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        reducer: &str,
+        initial: Dynamic,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        reduce_with_initial(ctx, array, FnPtr::new(reducer)?, initial)
+    }
     #[rhai_fn(return_raw, pure)]
     pub fn reduce_rev(
         ctx: NativeCallContext,
         array: &mut Array,
         reducer: FnPtr,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        reduce_rev_with_fn_name(ctx, array, reducer.fn_name())
+        reduce_rev_with_initial(ctx, array, reducer, Dynamic::UNIT)
     }
     #[rhai_fn(name = "reduce_rev", return_raw, pure)]
     pub fn reduce_rev_with_fn_name(
@@ -745,7 +714,7 @@ mod array_functions {
         array: &mut Array,
         reducer: &str,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        reduce_rev_with_fn_name_with_initial(ctx, array, reducer, Dynamic::UNIT)
+        reduce_rev(ctx, array, FnPtr::new(reducer)?)
     }
     #[rhai_fn(name = "reduce_rev", return_raw, pure)]
     pub fn reduce_rev_with_initial(
@@ -754,34 +723,23 @@ mod array_functions {
         reducer: FnPtr,
         initial: Dynamic,
     ) -> Result<Dynamic, Box<EvalAltResult>> {
-        reduce_rev_with_fn_name_with_initial(ctx, array, reducer.fn_name(), initial)
-    }
-    #[rhai_fn(name = "reduce_rev", return_raw, pure)]
-    pub fn reduce_rev_with_fn_name_with_initial(
-        ctx: NativeCallContext,
-        array: &mut Array,
-        reducer: &str,
-        initial: Dynamic,
-    ) -> Result<Dynamic, Box<EvalAltResult>> {
         if array.is_empty() {
             return Ok(initial);
         }
 
         let mut result = initial;
-        let mut index_val = Dynamic::UNIT;
+        let len = array.len();
 
-        for (i, item) in array.iter_mut().enumerate().rev() {
-            let mut args = [&mut result, &mut item.clone(), &mut index_val];
+        for (i, item) in array.iter().rev().enumerate() {
+            let item = item.clone();
 
-            result = ctx
-                .call_fn_raw(reducer, true, false, &mut args[..2])
+            result = reducer
+                .call_raw(&ctx, None, [result.clone(), item.clone()])
                 .or_else(|err| match *err {
                     EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(reducer) =>
+                        if fn_sig.starts_with(reducer.fn_name()) =>
                     {
-                        *args[1] = item.clone();
-                        *args[2] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(reducer, true, false, &mut args)
+                        reducer.call_raw(&ctx, None, [result, item, ((len - 1 - i) as INT).into()])
                     }
                     _ => Err(err),
                 })
@@ -796,6 +754,15 @@ mod array_functions {
         }
 
         Ok(result)
+    }
+    #[rhai_fn(name = "reduce_rev", return_raw, pure)]
+    pub fn reduce_rev_with_fn_name_with_initial(
+        ctx: NativeCallContext,
+        array: &mut Array,
+        reducer: &str,
+        initial: Dynamic,
+    ) -> Result<Dynamic, Box<EvalAltResult>> {
+        reduce_rev_with_initial(ctx, array, FnPtr::new(reducer)?, initial)
     }
     #[rhai_fn(name = "sort", return_raw)]
     pub fn sort_with_fn_name(
@@ -817,7 +784,7 @@ mod array_functions {
 
         array.sort_by(|x, y| {
             comparer
-                .call_dynamic(&ctx, None, [x.clone(), y.clone()])
+                .call_raw(&ctx, None, [x.clone(), y.clone()])
                 .ok()
                 .and_then(|v| v.as_int().ok())
                 .map(|v| match v {
@@ -849,16 +816,16 @@ mod array_functions {
 
         if type_id == TypeId::of::<INT>() {
             array.sort_by(|a, b| {
-                let a = a.as_int().expect("a is INT");
-                let b = b.as_int().expect("b is INT");
+                let a = a.as_int().expect("`INT`");
+                let b = b.as_int().expect("`INT`");
                 a.cmp(&b)
             });
             return Ok(());
         }
         if type_id == TypeId::of::<char>() {
             array.sort_by(|a, b| {
-                let a = a.as_char().expect("a is char");
-                let b = b.as_char().expect("b is char");
+                let a = a.as_char().expect("char");
+                let b = b.as_char().expect("char");
                 a.cmp(&b)
             });
             return Ok(());
@@ -866,20 +833,16 @@ mod array_functions {
         #[cfg(not(feature = "no_float"))]
         if type_id == TypeId::of::<crate::FLOAT>() {
             array.sort_by(|a, b| {
-                let a = a.as_float().expect("a is FLOAT");
-                let b = b.as_float().expect("b is FLOAT");
+                let a = a.as_float().expect("`FLOAT`");
+                let b = b.as_float().expect("`FLOAT`");
                 a.partial_cmp(&b).unwrap_or(Ordering::Equal)
             });
             return Ok(());
         }
         if type_id == TypeId::of::<ImmutableString>() {
             array.sort_by(|a, b| {
-                let a = a
-                    .read_lock::<ImmutableString>()
-                    .expect("a is ImmutableString");
-                let b = b
-                    .read_lock::<ImmutableString>()
-                    .expect("b is ImmutableString");
+                let a = a.read_lock::<ImmutableString>().expect("`ImmutableString`");
+                let b = b.read_lock::<ImmutableString>().expect("`ImmutableString`");
                 a.as_str().cmp(b.as_str())
             });
             return Ok(());
@@ -887,16 +850,16 @@ mod array_functions {
         #[cfg(feature = "decimal")]
         if type_id == TypeId::of::<rust_decimal::Decimal>() {
             array.sort_by(|a, b| {
-                let a = a.as_decimal().expect("a is Decimal");
-                let b = b.as_decimal().expect("b is Decimal");
+                let a = a.as_decimal().expect("`Decimal`");
+                let b = b.as_decimal().expect("`Decimal`");
                 a.cmp(&b)
             });
             return Ok(());
         }
         if type_id == TypeId::of::<bool>() {
             array.sort_by(|a, b| {
-                let a = a.as_bool().expect("a is bool");
-                let b = b.as_bool().expect("b is bool");
+                let a = a.as_bool().expect("`bool`");
+                let b = b.as_bool().expect("`bool`");
                 a.cmp(&b)
             });
             return Ok(());
@@ -907,13 +870,52 @@ mod array_functions {
 
         Ok(())
     }
-    #[rhai_fn(return_raw, pure)]
+    #[rhai_fn(return_raw)]
     pub fn drain(
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
-        drain_with_fn_name(ctx, array, filter.fn_name())
+        if array.is_empty() {
+            return Ok(Array::new());
+        }
+
+        let mut drained = Array::with_capacity(array.len());
+
+        let mut i = 0;
+        let mut x = 0;
+
+        while x < array.len() {
+            if filter
+                .call_raw(&ctx, None, [array[x].clone()])
+                .or_else(|err| match *err {
+                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                        if fn_sig.starts_with(filter.fn_name()) =>
+                    {
+                        filter.call_raw(&ctx, None, [array[x].clone(), (i as INT).into()])
+                    }
+                    _ => Err(err),
+                })
+                .map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                        "drain".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
+                        err,
+                        Position::NONE,
+                    ))
+                })?
+                .as_bool()
+                .unwrap_or(false)
+            {
+                drained.push(array.remove(x));
+            } else {
+                x += 1;
+            }
+
+            i += 1;
+        }
+
+        Ok(drained)
     }
     #[rhai_fn(name = "drain", return_raw)]
     pub fn drain_with_fn_name(
@@ -921,65 +923,7 @@ mod array_functions {
         array: &mut Array,
         filter: &str,
     ) -> Result<Array, Box<EvalAltResult>> {
-        if array.is_empty() {
-            return Ok(Array::new());
-        }
-
-        let mut index_val = Dynamic::UNIT;
-        let mut removed = Vec::with_capacity(array.len());
-        let mut count = 0;
-
-        for (i, item) in array.iter_mut().enumerate() {
-            let mut args = [item, &mut index_val];
-
-            let remove = match ctx.call_fn_raw(filter, true, false, &mut args[..1]) {
-                Ok(r) => r,
-                Err(err) => match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(filter) =>
-                    {
-                        *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(filter, true, false, &mut args)?
-                    }
-                    _ => {
-                        return Err(EvalAltResult::ErrorInFunctionCall(
-                            "drain".to_string(),
-                            ctx.source().unwrap_or("").to_string(),
-                            err,
-                            Position::NONE,
-                        )
-                        .into())
-                    }
-                },
-            }
-            .as_bool()
-            .unwrap_or(false);
-
-            removed.push(remove);
-
-            if remove {
-                count += 1;
-            }
-        }
-
-        if count == 0 {
-            return Ok(Array::new());
-        }
-
-        let mut result = Vec::with_capacity(count);
-        let mut x = 0;
-        let mut i = 0;
-
-        while i < array.len() {
-            if removed[x] {
-                result.push(array.remove(i));
-            } else {
-                i += 1;
-            }
-            x += 1;
-        }
-
-        Ok(result.into())
+        drain(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(name = "drain")]
     pub fn drain_range(array: &mut Array, start: INT, len: INT) -> Array {
@@ -1008,13 +952,52 @@ mod array_functions {
 
         array.drain(start..start + len).collect()
     }
-    #[rhai_fn(return_raw, pure)]
+    #[rhai_fn(return_raw)]
     pub fn retain(
         ctx: NativeCallContext,
         array: &mut Array,
         filter: FnPtr,
     ) -> Result<Array, Box<EvalAltResult>> {
-        retain_with_fn_name(ctx, array, filter.fn_name())
+        if array.is_empty() {
+            return Ok(Array::new());
+        }
+
+        let mut drained = Array::new();
+
+        let mut i = 0;
+        let mut x = 0;
+
+        while x < array.len() {
+            if !filter
+                .call_raw(&ctx, None, [array[x].clone()])
+                .or_else(|err| match *err {
+                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
+                        if fn_sig.starts_with(filter.fn_name()) =>
+                    {
+                        filter.call_raw(&ctx, None, [array[x].clone(), (i as INT).into()])
+                    }
+                    _ => Err(err),
+                })
+                .map_err(|err| {
+                    Box::new(EvalAltResult::ErrorInFunctionCall(
+                        "retain".to_string(),
+                        ctx.source().unwrap_or("").to_string(),
+                        err,
+                        Position::NONE,
+                    ))
+                })?
+                .as_bool()
+                .unwrap_or(false)
+            {
+                drained.push(array.remove(x));
+            } else {
+                x += 1;
+            }
+
+            i += 1;
+        }
+
+        Ok(drained)
     }
     #[rhai_fn(name = "retain", return_raw)]
     pub fn retain_with_fn_name(
@@ -1022,65 +1005,7 @@ mod array_functions {
         array: &mut Array,
         filter: &str,
     ) -> Result<Array, Box<EvalAltResult>> {
-        if array.is_empty() {
-            return Ok(Array::new());
-        }
-
-        let mut index_val = Dynamic::UNIT;
-        let mut removed = Vec::with_capacity(array.len());
-        let mut count = 0;
-
-        for (i, item) in array.iter_mut().enumerate() {
-            let mut args = [item, &mut index_val];
-
-            let keep = match ctx.call_fn_raw(filter, true, false, &mut args[..1]) {
-                Ok(r) => r,
-                Err(err) => match *err {
-                    EvalAltResult::ErrorFunctionNotFound(fn_sig, _)
-                        if fn_sig.starts_with(filter) =>
-                    {
-                        *args[1] = Dynamic::from(i as INT);
-                        ctx.call_fn_raw(filter, true, false, &mut args)?
-                    }
-                    _ => {
-                        return Err(EvalAltResult::ErrorInFunctionCall(
-                            "retain".to_string(),
-                            ctx.source().unwrap_or("").to_string(),
-                            err,
-                            Position::NONE,
-                        )
-                        .into())
-                    }
-                },
-            }
-            .as_bool()
-            .unwrap_or(false);
-
-            removed.push(!keep);
-
-            if !keep {
-                count += 1;
-            }
-        }
-
-        if count == 0 {
-            return Ok(Array::new());
-        }
-
-        let mut result = Vec::with_capacity(count);
-        let mut x = 0;
-        let mut i = 0;
-
-        while i < array.len() {
-            if removed[x] {
-                result.push(array.remove(i));
-            } else {
-                i += 1;
-            }
-            x += 1;
-        }
-
-        Ok(result.into())
+        retain(ctx, array, FnPtr::new(filter)?)
     }
     #[rhai_fn(name = "retain")]
     pub fn retain_range(array: &mut Array, start: INT, len: INT) -> Array {

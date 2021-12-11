@@ -14,7 +14,7 @@ use std::{
 ///
 /// Panics when hashing any data type other than a [`u64`].
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct StraightHasher(u64);
+struct StraightHasher(u64);
 
 impl Hasher for StraightHasher {
     #[inline(always)]
@@ -34,7 +34,7 @@ impl Hasher for StraightHasher {
 
 /// A hash builder for `StraightHasher`.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
-pub struct StraightHasherBuilder;
+struct StraightHasherBuilder;
 
 impl BuildHasher for StraightHasherBuilder {
     type Hasher = StraightHasher;
@@ -62,7 +62,10 @@ pub fn get_hasher() -> std::collections::hash_map::DefaultHasher {
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline]
 #[must_use]
-pub fn calc_qualified_var_hash<'a>(modules: impl Iterator<Item = &'a str>, var_name: &str) -> u64 {
+pub fn calc_qualified_var_hash<'a>(
+    modules: impl Iterator<Item = impl AsRef<str> + 'a>,
+    var_name: impl AsRef<str>,
+) -> u64 {
     let s = &mut get_hasher();
 
     // We always skip the first module
@@ -70,9 +73,9 @@ pub fn calc_qualified_var_hash<'a>(modules: impl Iterator<Item = &'a str>, var_n
     modules
         .inspect(|_| len += 1)
         .skip(1)
-        .for_each(|m| m.hash(s));
+        .for_each(|m| m.as_ref().hash(s));
     len.hash(s);
-    var_name.hash(s);
+    var_name.as_ref().hash(s);
     s.finish()
 }
 
@@ -87,9 +90,9 @@ pub fn calc_qualified_var_hash<'a>(modules: impl Iterator<Item = &'a str>, var_n
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline]
 #[must_use]
-pub fn calc_qualified_fn_hash<'a>(
-    modules: impl Iterator<Item = &'a str>,
-    fn_name: &str,
+pub fn calc_qualified_fn_hash(
+    modules: impl Iterator<Item = impl AsRef<str>>,
+    fn_name: impl AsRef<str>,
     num: usize,
 ) -> u64 {
     let s = &mut get_hasher();
@@ -99,9 +102,9 @@ pub fn calc_qualified_fn_hash<'a>(
     modules
         .inspect(|_| len += 1)
         .skip(1)
-        .for_each(|m| m.hash(s));
+        .for_each(|m| m.as_ref().hash(s));
     len.hash(s);
-    fn_name.hash(s);
+    fn_name.as_ref().hash(s);
     num.hash(s);
     s.finish()
 }
@@ -112,8 +115,8 @@ pub fn calc_qualified_fn_hash<'a>(
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
 #[inline(always)]
 #[must_use]
-pub fn calc_fn_hash(fn_name: &str, num: usize) -> u64 {
-    calc_qualified_fn_hash(empty(), fn_name, num)
+pub fn calc_fn_hash(fn_name: impl AsRef<str>, num: usize) -> u64 {
+    calc_qualified_fn_hash(empty::<&str>(), fn_name, num)
 }
 
 /// Calculate a [`u64`] hash key from a list of parameter types.
@@ -124,10 +127,7 @@ pub fn calc_fn_hash(fn_name: &str, num: usize) -> u64 {
 pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
     let s = &mut get_hasher();
     let mut len = 0;
-    params.for_each(|t| {
-        len += 1;
-        t.hash(s);
-    });
+    params.inspect(|_| len += 1).for_each(|t| t.hash(s));
     len.hash(s);
     s.finish()
 }
@@ -135,6 +135,6 @@ pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
 /// Combine two [`u64`] hashes by taking the XOR of them.
 #[inline(always)]
 #[must_use]
-pub(crate) const fn combine_hashes(a: u64, b: u64) -> u64 {
+pub const fn combine_hashes(a: u64, b: u64) -> u64 {
     a ^ b
 }

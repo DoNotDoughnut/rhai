@@ -26,7 +26,7 @@ Targets and builds
 * All CPU and O/S targets supported by Rust, including:
   * WebAssembly (WASM)
   * `no-std`
-* Minimum Rust version 1.49
+* Minimum Rust version 1.51
 
 
 Standard features

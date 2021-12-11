@@ -1,23 +1,18 @@
-use crate::fn_native::SendSync;
+use crate::func::native::SendSync;
 use crate::{Engine, EvalAltResult, Module, Position, Shared, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
-mod dummy;
-pub use dummy::DummyModuleResolver;
-
 mod collection;
-pub use collection::ModuleResolversCollection;
-
-#[cfg(not(feature = "no_std"))]
-#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+mod dummy;
 mod file;
+mod stat;
 
+pub use collection::ModuleResolversCollection;
+pub use dummy::DummyModuleResolver;
 #[cfg(not(feature = "no_std"))]
 #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 pub use file::FileModuleResolver;
-
-mod stat;
 pub use stat::StaticModuleResolver;
 
 /// Trait that encapsulates a module resolution service.

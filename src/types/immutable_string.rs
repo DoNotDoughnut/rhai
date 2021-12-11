@@ -1,6 +1,6 @@
 //! The `ImmutableString` type.
 
-use crate::fn_native::{shared_make_mut, shared_take};
+use crate::func::native::{shared_make_mut, shared_take};
 use crate::{Shared, SmartString};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -94,6 +94,13 @@ impl From<&str> for ImmutableString {
         Self(value.into())
     }
 }
+impl From<Box<str>> for ImmutableString {
+    #[inline(always)]
+    fn from(value: Box<str>) -> Self {
+        let value: SmartString = value.into();
+        Self(value.into())
+    }
+}
 impl From<&String> for ImmutableString {
     #[inline(always)]
     fn from(value: &String) -> Self {
@@ -108,14 +115,12 @@ impl From<String> for ImmutableString {
         Self(value.into())
     }
 }
-#[cfg(not(feature = "no_smartstring"))]
 impl From<&SmartString> for ImmutableString {
     #[inline(always)]
     fn from(value: &SmartString) -> Self {
         Self(value.clone().into())
     }
 }
-#[cfg(not(feature = "no_smartstring"))]
 impl From<SmartString> for ImmutableString {
     #[inline(always)]
     fn from(value: SmartString) -> Self {
@@ -173,7 +178,6 @@ impl<'a> FromIterator<String> for ImmutableString {
     }
 }
 
-#[cfg(not(feature = "no_smartstring"))]
 impl<'a> FromIterator<SmartString> for ImmutableString {
     #[inline]
     fn from_iter<T: IntoIterator<Item = SmartString>>(iter: T) -> Self {
@@ -532,7 +536,7 @@ impl ImmutableString {
     /// Create a new [`ImmutableString`].
     #[inline(always)]
     pub fn new() -> Self {
-        Self(SmartString::new().into())
+        Self(SmartString::new_const().into())
     }
     /// Consume the [`ImmutableString`] and convert it into a [`String`].
     /// If there are other references to the same string, a cloned copy is returned.

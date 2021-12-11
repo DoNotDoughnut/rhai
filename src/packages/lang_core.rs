@@ -1,6 +1,6 @@
 use crate::def_package;
-use crate::dynamic::Tag;
 use crate::plugin::*;
+use crate::types::dynamic::Tag;
 use crate::{Dynamic, EvalAltResult, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;

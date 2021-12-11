@@ -3,7 +3,7 @@
 #![cfg(not(feature = "no_function"))]
 #![allow(non_snake_case)]
 
-use crate::dynamic::Variant;
+use crate::types::dynamic::Variant;
 use crate::{Engine, EvalAltResult, ParseError, Scope, SmartString, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;

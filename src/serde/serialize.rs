@@ -1,6 +1,6 @@
 //! Implementations of [`serde::Serialize`].
 
-use crate::dynamic::Union;
+use crate::types::dynamic::Union;
 use crate::{Dynamic, ImmutableString};
 use serde::ser::{Serialize, Serializer};
 #[cfg(feature = "no_std")]
@@ -10,7 +10,7 @@ use std::prelude::v1::*;
 use serde::ser::SerializeMap;
 
 #[cfg(not(feature = "no_std"))]
-use crate::dynamic::Variant;
+use crate::types::dynamic::Variant;
 
 impl Serialize for Dynamic {
     fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
@@ -57,12 +57,13 @@ impl Serialize for Dynamic {
 
             #[cfg(not(feature = "no_index"))]
             Union::Array(ref a, _, _) => (**a).serialize(ser),
+            #[cfg(not(feature = "no_index"))]
+            Union::Blob(ref a, _, _) => (**a).serialize(ser),
             #[cfg(not(feature = "no_object"))]
             Union::Map(ref m, _, _) => {
                 let mut map = ser.serialize_map(Some(m.len()))?;
-                for (k, v) in m.iter() {
-                    map.serialize_entry(k.as_str(), v)?;
-                }
+                m.iter()
+                    .try_for_each(|(k, v)| map.serialize_entry(k.as_str(), v))?;
                 map.end()
             }
             Union::FnPtr(ref f, _, _) => ser.serialize_str(f.fn_name()),
