@@ -1,22 +1,37 @@
 Rhai Release Notes
 ==================
 
-Version 1.3.0
+Version 1.4.0
 =============
 
-Compiler requirement
---------------------
-
-* Minimum compiler version is bumped to 1.51.
-
-Bug fixes
----------
-
-* BLOB's no longer panic when accessed with an out-of-bounds index.
+This version adds support for integer _ranges_ via the `..` and `..=` operators.
 
 New features
 ------------
 
+* Added support for integer _ranges_ via the `..` and `..=` operators.
+
+
+Version 1.3.0
+=============
+
+This version adds native support for `BLOB`'s (byte arrays), as well as a number of configuration
+settings to fine-tun language features.
+
+Compiler requirement
+--------------------
+
+* Minimum compiler version is now 1.51.
+
+Bug fixes
+---------
+
+* `from_dynamic` now supports deserializing `Option`.
+
+New features
+------------
+
+* `BLOB` (essentially a byte array) is added as a supported primitive value type parallel to arrays.
 * New options for `Engine` which allows disabling `if`-expressions, `switch`-expressions, statement expressions, anonymous functions and/or looping (i.e. `while`, `loop`, `do` and `for` statements):
   * `Engine::set_allow_if_expression`
   * `Engine::set_allow_switch_expression`
@@ -28,9 +43,12 @@ New features
 Enhancements
 ------------
 
+* Two double quotes (`""`) in a string literal now maps to `"`; two back-ticks (``` `` ```) in a literal string now maps to `` ` ``.
+* Added `Engine::register_type_with_name_raw` to register a custom type based on a fully-qualified type path.
 * Added `into_array` and `into_typed_array` for `Dynamic`.
 * Added `FnPtr::call` and `FnPtr::call_within_context` to simplify calling a function pointer.
-* BLob's can now be deserialized (using `from_dynamic`) into `Vec<u8>` via [`serde_bytes`](https://crates.io/crates/serde_bytes).
+* A function's hashes are included in its JSON metadata to assist in debugging. Each function's `baseHash` field in the JSON object should map directly to the pre-calculated hash in the function call.
+* `Expression` now derefs to `Expr`.
 
 Deprecated and Gated API's
 --------------------------
@@ -39,15 +57,6 @@ Deprecated and Gated API's
 * `AST::merge_filtered` and `AST::combine_filtered` are no longer exported under `no_function`.
 * `AST::new` and `AST::new_with_source` are moved under `internals`.
 * `FnPtr::call_dynamic` is deprecated in favor of `FnPtr::call_raw`.
-
-
-Version 1.2.2
-=============
-
-Bug fixes
----------
-
-* `from_dynamic` now supports deserializing `Option`.
 
 
 Version 1.2.1

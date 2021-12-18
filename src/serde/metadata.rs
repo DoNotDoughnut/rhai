@@ -1,8 +1,11 @@
-use crate::{Engine, AST};
+#![cfg(feature = "metadata")]
+
+use crate::module::calc_native_fn_hash;
+use crate::{calc_fn_hash, Engine, AST};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-use std::{cmp::Ordering, collections::BTreeMap};
+use std::{cmp::Ordering, collections::BTreeMap, iter::empty};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,6 +86,8 @@ impl Ord for FnParam {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FnMetadata {
+    pub base_hash: u64,
+    pub full_hash: u64,
     pub namespace: FnNamespace,
     pub access: FnAccess,
     pub name: String,
@@ -118,15 +123,23 @@ impl Ord for FnMetadata {
 
 impl From<&crate::module::FuncInfo> for FnMetadata {
     fn from(info: &crate::module::FuncInfo) -> Self {
+        let base_hash = calc_fn_hash(&info.name, info.params);
+        let (typ, full_hash) = if info.func.is_script() {
+            (FnType::Script, base_hash)
+        } else {
+            (
+                FnType::Native,
+                calc_native_fn_hash(empty::<&str>(), &info.name, &info.param_types),
+            )
+        };
+
         Self {
+            base_hash,
+            full_hash,
             namespace: info.namespace.into(),
             access: info.access.into(),
             name: info.name.to_string(),
-            typ: if info.func.is_script() {
-                FnType::Script
-            } else {
-                FnType::Native
-            },
+            typ,
             num_params: info.params,
             params: info
                 .param_names
@@ -165,30 +178,6 @@ impl From<&crate::module::FuncInfo> for FnMetadata {
             } else {
                 Vec::new()
             },
-        }
-    }
-}
-
-#[cfg(not(feature = "no_function"))]
-impl From<crate::ast::ScriptFnMetadata<'_>> for FnMetadata {
-    fn from(info: crate::ast::ScriptFnMetadata) -> Self {
-        Self {
-            namespace: FnNamespace::Global,
-            access: info.access.into(),
-            name: info.name.to_string(),
-            typ: FnType::Script,
-            num_params: info.params.len(),
-            params: info
-                .params
-                .iter()
-                .map(|&s| FnParam {
-                    name: s.into(),
-                    typ: Some("Dynamic".into()),
-                })
-                .collect(),
-            return_type: Some("Dynamic".into()),
-            signature: info.to_string(),
-            doc_comments: info.comments.iter().map(|&s| s.into()).collect(),
         }
     }
 }
@@ -263,7 +252,8 @@ impl Engine {
             .for_each(|f| global.functions.push(f.into()));
 
         #[cfg(not(feature = "no_function"))]
-        _ast.iter_functions()
+        _ast.shared_lib()
+            .iter_fn()
             .for_each(|f| global.functions.push(f.into()));
 
         global.functions.sort();

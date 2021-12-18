@@ -68,6 +68,28 @@ fn test_for_loop() -> Result<(), Box<EvalAltResult>> {
         engine.eval::<INT>(
             "
                 let sum = 0;
+                for x in 1..10 { sum += x; }
+                sum
+            "
+        )?,
+        45
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                let sum = 0;
+                for x in 1..=10 { sum += x; }
+                sum
+            "
+        )?,
+        55
+    );
+
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                let sum = 0;
                 for x in range(1, 10, 2) { sum += x; }
                 sum
             "
@@ -247,18 +269,37 @@ fn test_for_overflow() -> Result<(), Box<EvalAltResult>> {
 fn test_for_string() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();
 
-    let script = r#"
-        let s = "hello";
-        let sum = 0;
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let s = "hello";
+                let sum = 0;
 
-        for ch in chars(s) {
-            sum += to_int(ch);
-        }
+                for ch in chars(s) {
+                    sum += to_int(ch);
+                }
 
-        sum
-    "#;
+                sum
+            "#
+        )?,
+        532
+    );
 
-    assert_eq!(engine.eval::<INT>(script)?, 532);
+    assert_eq!(
+        engine.eval::<INT>(
+            r#"
+                let s = "hello";
+                let sum = 0;
+
+                for ch in chars(s, 2..=3) {
+                    sum += to_int(ch);
+                }
+
+                sum
+            "#
+        )?,
+        216
+    );
 
     Ok(())
 }

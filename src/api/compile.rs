@@ -5,9 +5,6 @@ use crate::{Engine, ParseError, Scope, AST};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
 impl Engine {
     /// Compile a string into an [`AST`], which can be used later for evaluation.
     ///
@@ -313,7 +310,7 @@ impl Engine {
             self.optimization_level,
         )
     }
-    /// Parse a JSON string into an [object map][`Map`].
+    /// Parse a JSON string into an [object map][crate::Map].
     /// This is a light-weight alternative to using, say,
     /// [`serde_json`](https://crates.io/crates/serde_json) to deserialize the JSON.
     ///
@@ -362,14 +359,14 @@ impl Engine {
         &self,
         json: impl AsRef<str>,
         has_null: bool,
-    ) -> Result<Map, Box<crate::EvalAltResult>> {
+    ) -> Result<crate::Map, Box<crate::EvalAltResult>> {
         use crate::tokenizer::Token;
 
         fn parse_json_inner(
             engine: &Engine,
             json: &str,
             has_null: bool,
-        ) -> Result<Map, Box<crate::EvalAltResult>> {
+        ) -> Result<crate::Map, Box<crate::EvalAltResult>> {
             let mut scope = Scope::new();
             let json_text = json.trim_start();
             let scripts = if json_text.starts_with(Token::MapStart.literal_syntax()) {

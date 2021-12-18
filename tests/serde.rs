@@ -784,7 +784,7 @@ fn test_serde_blob() -> Result<(), Box<EvalAltResult>> {
     let r = engine.eval::<Dynamic>(
         "
             let x = blob(10);
-            for i in range(0, 10) { x[i] = i; }
+            for i in 0..10 { x[i] = i; }
             x
         ",
     )?;

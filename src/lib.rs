@@ -115,9 +115,14 @@ pub type FLOAT = f64;
 #[cfg(feature = "f32_float")]
 pub type FLOAT = f32;
 
+pub type ExclusiveRange = std::ops::Range<INT>;
+pub type InclusiveRange = std::ops::RangeInclusive<INT>;
+
 pub use ast::{FnAccess, AST};
 pub use custom_syntax::Expression;
-pub use engine::{Engine, EvalContext, OP_CONTAINS, OP_EQUALS};
+pub use engine::{
+    Engine, EvalContext, OP_CONTAINS, OP_EQUALS, OP_EXCLUSIVE_RANGE, OP_INCLUSIVE_RANGE,
+};
 pub use func::{NativeCallContext, RegisterNativeFunction};
 pub use module::{FnNamespace, Module};
 pub use tokenizer::Position;

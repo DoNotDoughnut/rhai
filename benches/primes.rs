@@ -19,7 +19,7 @@ prime_mask[1] = false;
 
 let total_primes_found = 0;
 
-for p in range(2, MAX_NUMBER_TO_CHECK) {
+for p in 2..=MAX_NUMBER_TO_CHECK {
     if prime_mask[p] {
         total_primes_found += 1;
         let i = 2 * p;

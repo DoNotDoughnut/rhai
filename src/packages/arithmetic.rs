@@ -121,12 +121,15 @@ macro_rules! gen_arithmetic_functions {
                 pub fn binary_xor(x: $arg_type, y: $arg_type) -> $arg_type {
                     x ^ y
                 }
+                #[rhai_fn(get = "is_zero", name = "is_zero")]
                 pub fn is_zero(x: $arg_type) -> bool {
                     x == 0
                 }
+                #[rhai_fn(get = "is_odd", name = "is_odd")]
                 pub fn is_odd(x: $arg_type) -> bool {
                     x % 2 != 0
                 }
+                #[rhai_fn(get = "is_even", name = "is_even")]
                 pub fn is_even(x: $arg_type) -> bool {
                     x % 2 == 0
                 }
@@ -209,12 +212,15 @@ def_package!(crate:ArithmeticPackage:"Basic arithmetic", lib, {
 
 #[export_module]
 mod int_functions {
+    #[rhai_fn(get = "is_zero", name = "is_zero")]
     pub fn is_zero(x: INT) -> bool {
         x == 0
     }
+    #[rhai_fn(get = "is_odd", name = "is_odd")]
     pub fn is_odd(x: INT) -> bool {
         x % 2 != 0
     }
+    #[rhai_fn(get = "is_even", name = "is_even")]
     pub fn is_even(x: INT) -> bool {
         x % 2 == 0
     }
@@ -335,6 +341,7 @@ mod f32_functions {
             x => Ok(x as INT),
         }
     }
+    #[rhai_fn(get = "is_zero", name = "is_zero")]
     pub fn is_zero(x: f32) -> bool {
         x == 0.0
     }
@@ -442,6 +449,7 @@ mod f64_functions {
             x => Ok(x as INT),
         }
     }
+    #[rhai_fn(get = "is_zero", name = "is_zero")]
     pub fn is_zero(x: f64) -> bool {
         x == 0.0
     }
@@ -536,6 +544,7 @@ pub mod decimal_functions {
             1
         }
     }
+    #[rhai_fn(get = "is_zero", name = "is_zero")]
     pub fn is_zero(x: Decimal) -> bool {
         x.is_zero()
     }

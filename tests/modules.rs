@@ -205,7 +205,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
                     r#"
                         let sum = 0;
 
-                        for x in range(0, 10) {
+                        for x in 0..10 {
                             import "hello" as h;
                             sum += h::answer;
                         }
@@ -229,7 +229,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
                             sum += h::answer;
                         }
 
-                        for x in range(0, 10) {
+                        for x in 0..10 {
                             foo();
                         }
 
@@ -249,7 +249,7 @@ fn test_module_resolver() -> Result<(), Box<EvalAltResult>> {
                     import "hello" as h;
                 }
 
-                for x in range(0, 10) {
+                for x in 0..10 {
                     foo();
                 }
             "#,

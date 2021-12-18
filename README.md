@@ -66,7 +66,8 @@ For those who actually want their own language
 ---------------------------------------------
 
 * Use as a [DSL](https://rhai.rs/book/engine/dsl.html).
-* Restrict the language by surgically [disabling keywords and operators](https://rhai.rs/book/engine/disable.html).
+* Disable certain [language features](https://rhai.rs/book/engine/options.html#language-features) such as [looping](https://rhai.rs/book/engine/disable-looping.html).
+* Further restrict the language by surgically [disabling keywords and operators](https://rhai.rs/book/engine/disable-keywords.html).
 * Define [custom operators](https://rhai.rs/book/engine/custom-op.html).
 * Extend the language with [custom syntax](https://rhai.rs/book/engine/custom-syntax.html).
 
@@ -100,7 +101,7 @@ print("Ready... Go!");
 let result;
 let now = timestamp();
 
-for n in range(0, REPEAT) {
+for n in 0..REPEAT {
     result = fib(TARGET);
 }
 

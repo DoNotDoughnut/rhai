@@ -34,10 +34,11 @@ pub use string_more::MoreStringPackage;
 
 /// Trait that all packages must implement.
 pub trait Package {
-    /// Register all the functions in a package into a store.
-    fn init(lib: &mut Module);
+    /// Initialize the package.
+    /// Functions should be registered into `module` here.
+    fn init(module: &mut Module);
 
-    /// Retrieve the generic package library from this package.
+    /// Get a reference to a shared module from this package.
     #[must_use]
     fn as_shared_module(&self) -> Shared<Module>;
 }
@@ -57,10 +58,10 @@ pub trait Package {
 ///
 /// fn add(x: i64, y: i64) -> Result<i64, Box<EvalAltResult>> { Ok(x + y) }
 ///
-/// def_package!(rhai:MyPackage:"My super-duper package", lib,
+/// def_package!(rhai:MyPackage:"My super-duper package", module,
 /// {
 ///     // Load a binary function with all value parameters.
-///     lib.set_native_fn("my_add", add);
+///     module.set_native_fn("my_add", add);
 /// });
 /// ```
 #[macro_export]
@@ -73,7 +74,6 @@ macro_rules! def_package {
             fn as_shared_module(&self) -> $root::Shared<$root::Module> {
                 self.0.clone()
             }
-
             fn init($lib: &mut $root::Module) {
                 $block
             }

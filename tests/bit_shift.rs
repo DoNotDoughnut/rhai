@@ -26,10 +26,12 @@ fn test_bit_fields() -> Result<(), Box<EvalAltResult>> {
         9
     );
     assert_eq!(engine.eval::<INT>("let x = 10; get_bits(x, 1, 3)")?, 5);
+    assert_eq!(engine.eval::<INT>("let x = 10; x[1..=3]")?, 5);
     assert_eq!(
         engine.eval::<INT>("let x = 10; set_bits(x, 1, 3, 7); x")?,
         14
     );
+    assert_eq!(engine.eval::<INT>("let x = 10; x[1..4] = 7; x")?, 14);
     assert_eq!(
         engine.eval::<INT>(
             "
@@ -37,6 +39,21 @@ fn test_bit_fields() -> Result<(), Box<EvalAltResult>> {
                 let count = 0;
 
                 for b in bits(x, 2, 10) {
+                    if b { count += 1; }
+                }
+
+                count
+            "
+        )?,
+        5
+    );
+    assert_eq!(
+        engine.eval::<INT>(
+            "
+                let x = 0b001101101010001;
+                let count = 0;
+
+                for b in bits(x, 2..=11) {
                     if b { count += 1; }
                 }
 

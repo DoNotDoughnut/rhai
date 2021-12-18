@@ -1,7 +1,8 @@
+use crate::plugin::*;
 use crate::types::dynamic::Variant;
-use crate::{def_package, EvalAltResult, INT};
+use crate::{def_package, EvalAltResult, ExclusiveRange, InclusiveRange, INT};
 use std::iter::{ExactSizeIterator, FusedIterator};
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -271,6 +272,7 @@ macro_rules! reg_range {
     ($lib:ident | $x:expr => $( $y:ty ),*) => {
         $(
             $lib.set_iterator::<Range<$y>>();
+            $lib.set_iterator::<RangeInclusive<$y>>();
             let _hash = $lib.set_native_fn($x, |from: $y, to: $y| Ok(from..to));
 
             #[cfg(feature = "metadata")]
@@ -449,6 +451,22 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
     // Register string iterator
     lib.set_iterator::<CharsStream>();
 
+    let _hash = lib.set_native_fn("chars", |string, range: ExclusiveRange| {
+        let from = INT::max(range.start, 0);
+        let to = INT::max(range.end, from);
+        Ok(CharsStream::new(string, from, to - from))
+    });
+    #[cfg(feature = "metadata")]
+    lib.update_fn_metadata(_hash, &["string: &str", "range: Range", "Iterator<Item=char>"]);
+
+    let _hash = lib.set_native_fn("chars", |string, range: InclusiveRange| {
+        let from = INT::max(*range.start(), 0);
+        let to = INT::max(*range.end(), from - 1);
+        Ok(CharsStream::new(string, from, to-from + 1))
+    });
+    #[cfg(feature = "metadata")]
+    lib.update_fn_metadata(_hash, &["string: &str", "range: RangeInclusive", "Iterator<Item=char>"]);
+
     let _hash = lib.set_native_fn("chars", |string, from, len| Ok(CharsStream::new(string, from, len)));
     #[cfg(feature = "metadata")]
     lib.update_fn_metadata(_hash, &["string: &str", "from: INT", "len: INT", "Iterator<Item=char>"]);
@@ -461,8 +479,31 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
     #[cfg(feature = "metadata")]
     lib.update_fn_metadata(_hash, &["string: &str", "Iterator<Item=char>"]);
 
+    #[cfg(not(feature = "no_object"))]
+    {
+        let _hash = lib.set_getter_fn("chars", |string: &mut ImmutableString| Ok(CharsStream::new(string, 0, INT::MAX)));
+        #[cfg(feature = "metadata")]
+        lib.update_fn_metadata(_hash, &["string: &mut ImmutableString", "Iterator<Item=char>"]);
+    }
+
     // Register bit-field iterator
     lib.set_iterator::<BitRange>();
+
+    let _hash = lib.set_native_fn("bits", |value, range: ExclusiveRange| {
+        let from = INT::max(range.start, 0);
+        let to = INT::max(range.end, from);
+        BitRange::new(value, from, to - from)
+    });
+    #[cfg(feature = "metadata")]
+    lib.update_fn_metadata(_hash, &["value: INT", "range: Range", "Iterator<Item=bool>"]);
+
+    let _hash = lib.set_native_fn("bits", |value, range: InclusiveRange| {
+        let from = INT::max(*range.start(), 0);
+        let to = INT::max(*range.end(), from - 1);
+        BitRange::new(value, from, to - from + 1)
+    });
+    #[cfg(feature = "metadata")]
+    lib.update_fn_metadata(_hash, &["value: INT", "range: RangeInclusive", "Iterator<Item=bool>"]);
 
     let _hash = lib.set_native_fn("bits", BitRange::new);
     #[cfg(feature = "metadata")]
@@ -472,7 +513,54 @@ def_package!(crate:BasicIteratorPackage:"Basic range iterators.", lib, {
     #[cfg(feature = "metadata")]
     lib.update_fn_metadata(_hash, &["value: INT", "from: INT", "Iterator<Item=bool>"]);
 
-    let _hash = lib.set_native_fn("bits", |value| BitRange::new(value, 0, INT::MAX));
+    let _hash = lib.set_native_fn("bits", |value| BitRange::new(value, 0, INT::MAX) );
     #[cfg(feature = "metadata")]
     lib.update_fn_metadata(_hash, &["value: INT", "Iterator<Item=bool>"]);
+
+    #[cfg(not(feature = "no_object"))]
+    {
+        let _hash = lib.set_getter_fn("bits", |value: &mut INT| BitRange::new(*value, 0, INT::MAX) );
+        #[cfg(feature = "metadata")]
+        lib.update_fn_metadata(_hash, &["value: &mut INT", "range: Range", "Iterator<Item=bool>"]);
+    }
+
+    combine_with_exported_module!(lib, "range", range_functions);
 });
+
+#[export_module]
+mod range_functions {
+    #[rhai_fn(get = "start", name = "start", pure)]
+    pub fn range_start(range: &mut ExclusiveRange) -> INT {
+        range.start
+    }
+    #[rhai_fn(get = "end", name = "end", pure)]
+    pub fn range_end(range: &mut ExclusiveRange) -> INT {
+        range.end
+    }
+    #[rhai_fn(name = "contains", pure)]
+    pub fn range_contains(range: &mut ExclusiveRange, value: INT) -> bool {
+        range.contains(&value)
+    }
+    #[rhai_fn(get = "is_inclusive", name = "is_inclusive", pure)]
+    pub fn range_is_inclusive(range: &mut ExclusiveRange) -> bool {
+        let _range = range;
+        false
+    }
+    #[rhai_fn(get = "start", name = "start", pure)]
+    pub fn range_inclusive_start(range: &mut InclusiveRange) -> INT {
+        *range.start()
+    }
+    #[rhai_fn(get = "end", name = "end", pure)]
+    pub fn range_inclusive_end(range: &mut InclusiveRange) -> INT {
+        *range.end()
+    }
+    #[rhai_fn(name = "contains", pure)]
+    pub fn range_inclusive_contains(range: &mut InclusiveRange, value: INT) -> bool {
+        range.contains(&value)
+    }
+    #[rhai_fn(get = "is_inclusive", name = "is_inclusive", pure)]
+    pub fn range_inclusive_is_inclusive(range: &mut InclusiveRange) -> bool {
+        let _range = range;
+        true
+    }
+}

@@ -3,12 +3,10 @@
 
 mod de;
 mod deserialize;
+mod metadata;
 mod ser;
 mod serialize;
 mod str;
-
-#[cfg(feature = "metadata")]
-mod metadata;
 
 pub use de::from_dynamic;
 pub use ser::to_dynamic;

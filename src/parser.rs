@@ -15,8 +15,9 @@ use crate::tokenizer::{
 };
 use crate::types::dynamic::AccessMode;
 use crate::{
-    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Engine, Identifier,
-    ImmutableString, LexError, ParseError, ParseErrorType, Position, Scope, Shared, StaticVec, AST,
+    calc_fn_hash, calc_qualified_fn_hash, calc_qualified_var_hash, Engine, ExclusiveRange,
+    Identifier, ImmutableString, InclusiveRange, LexError, ParseError, ParseErrorType, Position,
+    Scope, Shared, StaticVec, AST, INT,
 };
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
@@ -26,12 +27,6 @@ use std::{
     num::{NonZeroU8, NonZeroUsize},
     ops::AddAssign,
 };
-
-#[cfg(not(feature = "no_float"))]
-use crate::{custom_syntax::markers::CUSTOM_SYNTAX_MARKER_FLOAT, FLOAT};
-
-#[cfg(not(feature = "no_function"))]
-use crate::FnAccess;
 
 type PERR = ParseErrorType;
 
@@ -1009,6 +1004,7 @@ fn parse_switch(
     }
 
     let mut table = BTreeMap::<u64, Box<(Option<Expr>, StmtBlock)>>::new();
+    let mut ranges = StaticVec::<(INT, INT, bool, Option<Expr>, StmtBlock)>::new();
     let mut def_pos = Position::NONE;
     let mut def_stmt = None;
 
@@ -1039,6 +1035,7 @@ fn parse_switch(
                 (None, None)
             }
             (Token::Underscore, pos) => return Err(PERR::DuplicatedSwitchCase.into_err(*pos)),
+
             _ if def_stmt.is_some() => return Err(PERR::WrongSwitchDefaultCase.into_err(def_pos)),
 
             _ => {
@@ -1053,8 +1050,20 @@ fn parse_switch(
             }
         };
 
-        let hash = if let Some(expr) = expr {
-            if let Some(value) = expr.get_literal_value() {
+        let (hash, range) = if let Some(expr) = expr {
+            let value = expr.get_literal_value().ok_or_else(|| {
+                PERR::ExprExpected("a literal".to_string()).into_err(expr.position())
+            })?;
+
+            let guard = value.read_lock::<ExclusiveRange>();
+
+            if let Some(range) = guard {
+                (None, Some((range.start, range.end, false)))
+            } else if let Some(range) = value.read_lock::<InclusiveRange>() {
+                (None, Some((*range.start(), *range.end(), true)))
+            } else if value.is::<INT>() && !ranges.is_empty() {
+                return Err(PERR::WrongSwitchIntegerCase.into_err(expr.position()));
+            } else {
                 let hasher = &mut get_hasher();
                 value.hash(hasher);
                 let hash = hasher.finish();
@@ -1062,13 +1071,10 @@ fn parse_switch(
                 if table.contains_key(&hash) {
                     return Err(PERR::DuplicatedSwitchCase.into_err(expr.position()));
                 }
-
-                Some(hash)
-            } else {
-                return Err(PERR::ExprExpected("a literal".to_string()).into_err(expr.position()));
+                (Some(hash), None)
             }
         } else {
-            None
+            (None, None)
         };
 
         match input.next().expect(NEVER_ENDS) {
@@ -1087,11 +1093,19 @@ fn parse_switch(
 
         let need_comma = !stmt.is_self_terminated();
 
-        def_stmt = if let Some(hash) = hash {
-            table.insert(hash, (condition, stmt.into()).into());
-            None
-        } else {
-            Some(stmt.into())
+        def_stmt = match (hash, range) {
+            (None, Some(range)) => {
+                ranges.push((range.0, range.1, range.2, condition, stmt.into()));
+                None
+            }
+            (Some(hash), None) => {
+                table.insert(hash, (condition, stmt.into()).into());
+                None
+            }
+            (None, None) => Some(stmt.into()),
+            (Some(_), Some(_)) => {
+                unreachable!("cannot have both a hash and a range in a `switch` statement")
+            }
         };
 
         match input.peek().expect(NEVER_ENDS) {
@@ -1121,7 +1135,7 @@ fn parse_switch(
 
     Ok(Stmt::Switch(
         item,
-        (table, def_stmt_block).into(),
+        (table, def_stmt_block, ranges).into(),
         settings.pos,
     ))
 }
@@ -1573,7 +1587,7 @@ fn parse_unary(
                     .map(|i| Expr::IntegerConstant(i, pos))
                     .or_else(|| {
                         #[cfg(not(feature = "no_float"))]
-                        return Some(Expr::FloatConstant((-(num as FLOAT)).into(), pos));
+                        return Some(Expr::FloatConstant((-(num as crate::FLOAT)).into(), pos));
                         #[cfg(feature = "no_float")]
                         return None;
                     })
@@ -1981,18 +1995,6 @@ fn parse_binary_op(
         args.shrink_to_fit();
 
         root = match op_token {
-            Token::Plus
-            | Token::Minus
-            | Token::Multiply
-            | Token::Divide
-            | Token::LeftShift
-            | Token::RightShift
-            | Token::Modulo
-            | Token::PowerOf
-            | Token::Ampersand
-            | Token::Pipe
-            | Token::XOr => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
-
             // '!=' defaults to true when passed invalid operands
             Token::NotEqualsTo => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
 
@@ -2064,7 +2066,7 @@ fn parse_binary_op(
                 .into_fn_call_expr(pos)
             }
 
-            op_token => return Err(PERR::UnknownOperator(op_token.into()).into_err(pos)),
+            _ => FnCallExpr { args, ..op_base }.into_fn_call_expr(pos),
         };
     }
 }
@@ -2173,19 +2175,23 @@ fn parse_custom_syntax(
                 }
             },
             #[cfg(not(feature = "no_float"))]
-            CUSTOM_SYNTAX_MARKER_FLOAT => match input.next().expect(NEVER_ENDS) {
-                (Token::FloatConstant(f), pos) => {
-                    inputs.push(Expr::FloatConstant(f, pos));
-                    segments.push(f.to_string().into());
-                    tokens.push(state.get_identifier(CUSTOM_SYNTAX_MARKER_FLOAT));
+            crate::custom_syntax::markers::CUSTOM_SYNTAX_MARKER_FLOAT => {
+                match input.next().expect(NEVER_ENDS) {
+                    (Token::FloatConstant(f), pos) => {
+                        inputs.push(Expr::FloatConstant(f, pos));
+                        segments.push(f.to_string().into());
+                        tokens.push(state.get_identifier(
+                            crate::custom_syntax::markers::CUSTOM_SYNTAX_MARKER_FLOAT,
+                        ));
+                    }
+                    (_, pos) => {
+                        return Err(PERR::MissingSymbol(
+                            "Expecting a floating-point number".to_string(),
+                        )
+                        .into_err(pos))
+                    }
                 }
-                (_, pos) => {
-                    return Err(PERR::MissingSymbol(
-                        "Expecting a floating-point number".to_string(),
-                    )
-                    .into_err(pos))
-                }
-            },
+            }
             CUSTOM_SYNTAX_MARKER_STRING => match input.next().expect(NEVER_ENDS) {
                 (Token::StringConstant(s), pos) => {
                     let s: ImmutableString = state.get_identifier(s).into();
@@ -2463,14 +2469,12 @@ fn parse_for(
 
     let prev_stack_len = state.stack.len();
 
-    let counter_var = if let Some(name) = counter_name {
+    let counter_var = counter_name.map(|name| {
         let name = state.get_identifier(name);
         let pos = counter_pos.expect("`Some`");
         state.stack.push((name.clone(), AccessMode::ReadWrite));
-        Some(Ident { name, pos })
-    } else {
-        None
-    };
+        Ident { name, pos }
+    });
 
     let loop_var = state.get_identifier(name);
     state.stack.push((loop_var.clone(), AccessMode::ReadWrite));
@@ -2849,9 +2853,9 @@ fn parse_stmt(
         Token::Fn | Token::Private => {
             let access = if matches!(token, Token::Private) {
                 eat_token(input, Token::Private);
-                FnAccess::Private
+                crate::FnAccess::Private
             } else {
-                FnAccess::Public
+                crate::FnAccess::Public
             };
 
             match input.next().expect(NEVER_ENDS) {
@@ -3055,7 +3059,7 @@ fn parse_fn(
     input: &mut TokenStream,
     state: &mut ParseState,
     lib: &mut FunctionsLib,
-    access: FnAccess,
+    access: crate::FnAccess,
     settings: ParseSettings,
     #[cfg(not(feature = "no_function"))]
     #[cfg(feature = "metadata")]
@@ -3281,7 +3285,7 @@ fn parse_anon_fn(
     // Define the function
     let script = ScriptFnDef {
         name: fn_name.clone(),
-        access: FnAccess::Public,
+        access: crate::FnAccess::Public,
         params,
         body: body.into(),
         lib: None,

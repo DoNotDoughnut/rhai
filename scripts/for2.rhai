@@ -8,7 +8,7 @@ let now = timestamp();
 
 let list = [];
 
-for i in range(0, MAX) {
+for i in 0..MAX {
     list.push(i);
 }
 

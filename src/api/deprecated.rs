@@ -4,7 +4,6 @@ use crate::{
     Dynamic, Engine, EvalAltResult, FnPtr, ImmutableString, NativeCallContext, RhaiResult, Scope,
     AST,
 };
-
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 

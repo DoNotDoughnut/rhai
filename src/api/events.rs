@@ -156,9 +156,9 @@ impl Engine {
     /// let mut engine = Engine::new();
     ///
     /// engine.on_progress(move |ops| {
-    ///     if ops > 10000 {
-    ///         Some("Over 10,000 operations!".into())
-    ///     } else if ops % 800 == 0 {
+    ///     if ops > 1000 {
+    ///         Some("Over 1,000 operations!".into())
+    ///     } else if ops % 123 == 0 {
     ///         *logger.write().unwrap() = ops;
     ///         None
     ///     } else {
@@ -166,10 +166,10 @@ impl Engine {
     ///     }
     /// });
     ///
-    /// engine.run("for x in range(0, 50000) {}")
+    /// engine.run("for x in 0..5000 { print(x); }")
     ///       .expect_err("should error");
     ///
-    /// assert_eq!(*result.read().unwrap(), 9600);
+    /// assert_eq!(*result.read().unwrap(), 984);
     ///
     /// # Ok(())
     /// # }

@@ -19,7 +19,7 @@ print("Ready... Go!");
 let result;
 let now = timestamp();
 
-for n in range(0, REPEAT) {
+for n in 0..REPEAT {
     result = fib(TARGET);
 }
 

@@ -8,7 +8,24 @@ use std::{
     iter::empty,
 };
 
-/// A hasher that only takes one single [`u64`] and returns it as a hash key.
+/// Dummy hash value to map zeros to. This value can be anything.
+///
+/// # Notes
+///
+/// Hashes are `u64`, and they can be zero (although extremely unlikely).
+/// It is possible to hijack the zero value to indicate non-existence,
+/// like [`None`] in [`Option<u64>`].
+///
+/// When a hash is calculated to be zero, it gets mapped to this alternate hash value.
+/// This has the effect of releasing the zero value at the expense of causing the probability of
+/// this value to double, which has minor impacts.
+pub const ALT_ZERO_HASH: u64 = 42;
+
+/// A hasher that only takes one single [`u64`] and returns it as a non-zero hash key.
+///
+/// # Zeros
+///
+/// If the value is zero, it is mapped to `ALT_ZERO_HASH`.
 ///
 /// # Panics
 ///
@@ -29,6 +46,10 @@ impl Hasher for StraightHasher {
         key.copy_from_slice(bytes);
 
         self.0 = u64::from_ne_bytes(key);
+
+        if self.0 == 0 {
+            self.0 = ALT_ZERO_HASH
+        }
     }
 }
 
@@ -41,7 +62,7 @@ impl BuildHasher for StraightHasherBuilder {
 
     #[inline(always)]
     fn build_hasher(&self) -> Self::Hasher {
-        StraightHasher(42)
+        StraightHasher(ALT_ZERO_HASH)
     }
 }
 
@@ -52,10 +73,14 @@ pub fn get_hasher() -> std::collections::hash_map::DefaultHasher {
     Default::default()
 }
 
-/// Calculate a [`u64`] hash key from a namespace-qualified variable name.
+/// Calculate a non-zero [`u64`] hash key from a namespace-qualified variable name.
 ///
 /// Module names are passed in via `&str` references from an iterator.
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
+///
+/// # Zeros
+///
+/// If the hash happens to be zero, it is mapped to `DEFAULT_HASH`.
 ///
 /// # Note
 ///
@@ -76,14 +101,22 @@ pub fn calc_qualified_var_hash<'a>(
         .for_each(|m| m.as_ref().hash(s));
     len.hash(s);
     var_name.as_ref().hash(s);
-    s.finish()
+
+    match s.finish() {
+        0 => ALT_ZERO_HASH,
+        r => r,
+    }
 }
 
-/// Calculate a [`u64`] hash key from a namespace-qualified function name
+/// Calculate a non-zero [`u64`] hash key from a namespace-qualified function name
 /// and the number of parameters, but no parameter types.
 ///
 /// Module names are passed in via `&str` references from an iterator.
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
+///
+/// # Zeros
+///
+/// If the hash happens to be zero, it is mapped to `DEFAULT_HASH`.
 ///
 /// # Note
 ///
@@ -106,22 +139,34 @@ pub fn calc_qualified_fn_hash(
     len.hash(s);
     fn_name.as_ref().hash(s);
     num.hash(s);
-    s.finish()
+
+    match s.finish() {
+        0 => ALT_ZERO_HASH,
+        r => r,
+    }
 }
 
-/// Calculate a [`u64`] hash key from a non-namespace-qualified function name
+/// Calculate a non-zero [`u64`] hash key from a non-namespace-qualified function name
 /// and the number of parameters, but no parameter types.
 ///
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
+///
+/// # Zeros
+///
+/// If the hash happens to be zero, it is mapped to `DEFAULT_HASH`.
 #[inline(always)]
 #[must_use]
 pub fn calc_fn_hash(fn_name: impl AsRef<str>, num: usize) -> u64 {
     calc_qualified_fn_hash(empty::<&str>(), fn_name, num)
 }
 
-/// Calculate a [`u64`] hash key from a list of parameter types.
+/// Calculate a non-zero [`u64`] hash key from a list of parameter types.
 ///
 /// Parameter types are passed in via [`TypeId`] values from an iterator.
+///
+/// # Zeros
+///
+/// If the hash happens to be zero, it is mapped to `DEFAULT_HASH`.
 #[inline]
 #[must_use]
 pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
@@ -129,12 +174,23 @@ pub fn calc_fn_params_hash(params: impl Iterator<Item = TypeId>) -> u64 {
     let mut len = 0;
     params.inspect(|_| len += 1).for_each(|t| t.hash(s));
     len.hash(s);
-    s.finish()
+
+    match s.finish() {
+        0 => ALT_ZERO_HASH,
+        r => r,
+    }
 }
 
 /// Combine two [`u64`] hashes by taking the XOR of them.
+///
+/// # Zeros
+///
+/// If the hash happens to be zero, it is mapped to `DEFAULT_HASH`.
 #[inline(always)]
 #[must_use]
 pub const fn combine_hashes(a: u64, b: u64) -> u64 {
-    a ^ b
+    match a ^ b {
+        0 => ALT_ZERO_HASH,
+        r => r,
+    }
 }

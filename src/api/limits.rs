@@ -2,10 +2,9 @@
 #![cfg(not(feature = "unchecked"))]
 
 use crate::Engine;
+use std::num::{NonZeroU64, NonZeroUsize};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-
-use std::num::{NonZeroU64, NonZeroUsize};
 
 /// A type containing all the limits imposed by the [`Engine`].
 ///

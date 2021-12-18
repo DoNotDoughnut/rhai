@@ -51,7 +51,7 @@ fn bench_iterations_array(bench: &mut Bencher) {
     let script = r#"
             let x = [];
             x.pad(1000, 0);
-            for i in range(0, 1000) { x[i] = i % 256; }
+            for i in 0..1000 { x[i] = i % 256; }
         "#;
 
     let mut engine = Engine::new();
@@ -66,7 +66,7 @@ fn bench_iterations_array(bench: &mut Bencher) {
 fn bench_iterations_blob(bench: &mut Bencher) {
     let script = r#"
             let x = blob(1000, 0);
-            for i in range(0, 1000) { x[i] = i % 256; }
+            for i in 0..1000 { x[i] = i % 256; }
         "#;
 
     let mut engine = Engine::new();

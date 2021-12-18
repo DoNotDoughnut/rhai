@@ -4,6 +4,8 @@ use rhai::{Engine, EvalAltResult, INT};
 #[test]
 fn test_max_operations() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
+    #[cfg(not(feature = "no_optimize"))]
+    engine.set_optimization_level(rhai::OptimizationLevel::None);
     engine.set_max_operations(500);
 
     engine.on_progress(|count| {
@@ -17,14 +19,14 @@ fn test_max_operations() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .eval::<()>("for x in range(0, 500) {}")
+            .eval::<()>("for x in 0..500 {}")
             .expect_err("should error"),
         EvalAltResult::ErrorTooManyOperations(_)
     ));
 
     engine.set_max_operations(0);
 
-    engine.eval::<()>("for x in range(0, 10000) {}")?;
+    engine.eval::<()>("for x in 0..10000 {}")?;
 
     Ok(())
 }
@@ -101,7 +103,7 @@ fn test_max_operations_eval() -> Result<(), Box<EvalAltResult>> {
         *engine
             .eval::<()>(
                 r#"
-                    let script = "for x in range(0, 500) {}";
+                    let script = "for x in 0..500 {}";
                     eval(script);
                 "#
             )
@@ -115,6 +117,8 @@ fn test_max_operations_eval() -> Result<(), Box<EvalAltResult>> {
 #[test]
 fn test_max_operations_progress() -> Result<(), Box<EvalAltResult>> {
     let mut engine = Engine::new();
+    #[cfg(not(feature = "no_optimize"))]
+    engine.set_optimization_level(rhai::OptimizationLevel::None);
     engine.set_max_operations(500);
 
     engine.on_progress(|count| {
@@ -127,7 +131,7 @@ fn test_max_operations_progress() -> Result<(), Box<EvalAltResult>> {
 
     assert!(matches!(
         *engine
-            .eval::<()>("for x in range(0, 500) {}")
+            .eval::<()>("for x in 0..500 {}")
             .expect_err("should error"),
         EvalAltResult::ErrorTerminated(x, _) if x.as_int()? == 42
     ));

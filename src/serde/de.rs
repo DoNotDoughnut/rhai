@@ -8,12 +8,6 @@ use serde::{Deserialize, Deserializer};
 use std::prelude::v1::*;
 use std::{any::type_name, fmt};
 
-#[cfg(not(feature = "no_index"))]
-use crate::{Array, Blob};
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
 /// Deserializer for [`Dynamic`][crate::Dynamic] which is kept as a reference.
 ///
 /// The reference is necessary because the deserialized type may hold references
@@ -363,7 +357,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
         #[cfg(not(feature = "no_index"))]
         return self
             .value
-            .downcast_ref::<Blob>()
+            .downcast_ref::<crate::Blob>()
             .map_or_else(|| self.type_error(), |x| _visitor.visit_bytes(x));
 
         #[cfg(feature = "no_index")]
@@ -412,7 +406,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 
     fn deserialize_seq<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_index"))]
-        return self.value.downcast_ref::<Array>().map_or_else(
+        return self.value.downcast_ref::<crate::Array>().map_or_else(
             || self.type_error(),
             |arr| _visitor.visit_seq(IterateDynamicArray::new(arr.iter())),
         );
@@ -440,7 +434,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
 
     fn deserialize_map<V: Visitor<'de>>(self, _visitor: V) -> Result<V::Value, Box<EvalAltResult>> {
         #[cfg(not(feature = "no_object"))]
-        return self.value.downcast_ref::<Map>().map_or_else(
+        return self.value.downcast_ref::<crate::Map>().map_or_else(
             || self.type_error(),
             |map| {
                 _visitor.visit_map(IterateMap::new(
@@ -473,7 +467,7 @@ impl<'de> Deserializer<'de> for &mut DynamicDeserializer<'de> {
             visitor.visit_enum(s.as_str().into_deserializer())
         } else {
             #[cfg(not(feature = "no_object"))]
-            if let Some(map) = self.value.downcast_ref::<Map>() {
+            if let Some(map) = self.value.downcast_ref::<crate::Map>() {
                 let mut iter = map.iter();
                 let first = iter.next();
                 let second = iter.next();

@@ -16,8 +16,7 @@ use std::{
 
 /// The system immutable string type.
 ///
-/// An [`ImmutableString`] wraps an [`Rc`][std::rc::Rc]`<`[`SmartString`][smartstring::SmartString]`>`
-///  (or [`Arc`][std::sync::Arc]`<`[`SmartString`][smartstring::SmartString]`>` under the `sync` feature)
+/// An [`ImmutableString`] wraps an `Rc<SmartString>` (or `Arc<SmartString>` under the `sync` feature)
 /// so that it can be simply shared and not cloned.
 ///
 /// # Example

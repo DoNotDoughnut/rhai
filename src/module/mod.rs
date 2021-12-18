@@ -23,12 +23,6 @@ use std::{
     ops::{Add, AddAssign, Deref, DerefMut},
 };
 
-#[cfg(not(feature = "no_index"))]
-use crate::Array;
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
 /// A type representing the namespace of a function.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum FnNamespace {
@@ -96,8 +90,7 @@ impl FuncInfo {
     }
 }
 
-/// _(internals)_ Calculate a [`u64`] hash key from a namespace-qualified function name and
-/// parameter types.
+/// _(internals)_ Calculate a non-zero [`u64`] hash key from a namespace-qualified function name and parameter types.
 /// Exported under the `internals` feature only.
 ///
 /// Module names are passed in via `&str` references from an iterator.
@@ -107,7 +100,7 @@ impl FuncInfo {
 ///
 /// The first module name is skipped.  Hashing starts from the _second_ module in the chain.
 #[inline]
-fn calc_native_fn_hash(
+pub fn calc_native_fn_hash(
     modules: impl Iterator<Item = impl AsRef<str>>,
     fn_name: impl AsRef<str>,
     params: &[TypeId],
@@ -180,8 +173,7 @@ impl fmt::Debug for Module {
             d.field(
                 "functions",
                 &self
-                    .functions
-                    .values()
+                    .iter_fn()
                     .map(|f| f.func.to_string())
                     .collect::<BTreeSet<_>>(),
             );
@@ -359,9 +351,8 @@ impl Module {
     #[cfg(feature = "metadata")]
     #[inline]
     pub fn gen_fn_signatures(&self) -> impl Iterator<Item = String> + '_ {
-        self.functions
-            .values()
-            .filter(|f| match f.access {
+        self.iter_fn()
+            .filter(|&f| match f.access {
                 FnAccess::Public => true,
                 FnAccess::Private => false,
             })
@@ -502,8 +493,7 @@ impl Module {
         } else {
             let name = name.as_ref();
 
-            self.functions
-                .values()
+            self.iter_fn()
                 .find(|f| f.params == num_params && f.name == name)
                 .and_then(|f| f.func.get_script_fn_def())
         }
@@ -667,7 +657,7 @@ impl Module {
         type_id
     }
 
-    /// Set a Rust function into the [`Module`], returning a hash key.
+    /// Set a Rust function into the [`Module`], returning a non-zero hash key.
     ///
     /// If there is an existing Rust function of the same hash, it is replaced.
     ///
@@ -729,7 +719,7 @@ impl Module {
 
     /// Set a Rust function taking a reference to the scripting [`Engine`][crate::Engine],
     /// the current set of functions, plus a list of mutable [`Dynamic`] references
-    /// into the [`Module`], returning a hash key.
+    /// into the [`Module`], returning a non-zero hash key.
     ///
     /// Use this to register a built-in function which must reference settings on the scripting
     /// [`Engine`][crate::Engine] (e.g. to prevent growing an array beyond the allowed maximum size),
@@ -822,7 +812,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust function into the [`Module`], returning a hash key.
+    /// Set a Rust function into the [`Module`], returning a non-zero hash key.
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
@@ -861,7 +851,7 @@ impl Module {
         )
     }
 
-    /// Set a Rust getter function taking one mutable parameter, returning a hash key.
+    /// Set a Rust getter function taking one mutable parameter, returning a non-zero hash key.
     /// This function is automatically exposed to the global namespace.
     ///
     /// If there is a similar existing Rust getter function, it is replaced.
@@ -898,7 +888,7 @@ impl Module {
     }
 
     /// Set a Rust setter function taking two parameters (the first one mutable) into the [`Module`],
-    /// returning a hash key.
+    /// returning a non-zero hash key.
     /// This function is automatically exposed to the global namespace.
     ///
     /// If there is a similar existing setter Rust function, it is replaced.
@@ -939,14 +929,14 @@ impl Module {
     }
 
     /// Set a Rust index getter taking two parameters (the first one mutable) into the [`Module`],
-    /// returning a hash key.
+    /// returning a non-zero hash key.
     /// This function is automatically exposed to the global namespace.
     ///
     /// If there is a similar existing setter Rust function, it is replaced.
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`] or [`Map`].
+    /// Panics if the type is [`Array`][crate::Array] or [`Map`][crate::Map].
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Function Metadata
@@ -975,11 +965,11 @@ impl Module {
         F: Fn(&mut A, B) -> Result<T, Box<EvalAltResult>> + SendSync + 'static,
     {
         #[cfg(not(feature = "no_index"))]
-        if TypeId::of::<A>() == TypeId::of::<Array>() {
+        if TypeId::of::<A>() == TypeId::of::<crate::Array>() {
             panic!("Cannot register indexer for arrays.");
         }
         #[cfg(not(feature = "no_object"))]
-        if TypeId::of::<A>() == TypeId::of::<Map>() {
+        if TypeId::of::<A>() == TypeId::of::<crate::Map>() {
             panic!("Cannot register indexer for object maps.");
         }
         if TypeId::of::<A>() == TypeId::of::<String>()
@@ -1000,14 +990,14 @@ impl Module {
     }
 
     /// Set a Rust index setter taking three parameters (the first one mutable) into the [`Module`],
-    /// returning a hash key.
+    /// returning a non-zero hash key.
     /// This function is automatically exposed to the global namespace.
     ///
     /// If there is a similar existing Rust function, it is replaced.
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`] or [`Map`].
+    /// Panics if the type is [`Array`][crate::Array] or [`Map`][crate::Map].
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Function Metadata
@@ -1036,11 +1026,11 @@ impl Module {
         F: Fn(&mut A, B, C) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     {
         #[cfg(not(feature = "no_index"))]
-        if TypeId::of::<A>() == TypeId::of::<Array>() {
+        if TypeId::of::<A>() == TypeId::of::<crate::Array>() {
             panic!("Cannot register indexer for arrays.");
         }
         #[cfg(not(feature = "no_object"))]
-        if TypeId::of::<A>() == TypeId::of::<Map>() {
+        if TypeId::of::<A>() == TypeId::of::<crate::Map>() {
             panic!("Cannot register indexer for object maps.");
         }
         if TypeId::of::<A>() == TypeId::of::<String>()
@@ -1060,7 +1050,7 @@ impl Module {
         )
     }
 
-    /// Set a pair of Rust index getter and setter functions, returning both hash keys.
+    /// Set a pair of Rust index getter and setter functions, returning both non-zero hash keys.
     /// This is a short-hand for [`set_indexer_get_fn`][Module::set_indexer_get_fn] and
     /// [`set_indexer_set_fn`][Module::set_indexer_set_fn].
     ///
@@ -1068,7 +1058,7 @@ impl Module {
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`] or [`Map`].
+    /// Panics if the type is [`Array`][crate::Array] or [`Map`][crate::Map].
     /// Indexers for arrays, object maps and strings cannot be registered.
     ///
     /// # Function Metadata
@@ -1233,7 +1223,7 @@ impl Module {
             other
                 .functions
                 .iter()
-                .filter(|(_, f)| {
+                .filter(|&(_, f)| {
                     _filter(
                         f.namespace,
                         f.access,
@@ -1332,18 +1322,15 @@ impl Module {
             &Shared<crate::ast::ScriptFnDef>,
         ),
     > + '_ {
-        self.functions
-            .values()
-            .filter(|f| f.func.is_script())
-            .map(|f| {
-                (
-                    f.namespace,
-                    f.access,
-                    f.name.as_str(),
-                    f.params,
-                    f.func.get_script_fn_def().expect("scripted function"),
-                )
-            })
+        self.iter_fn().filter(|&f| f.func.is_script()).map(|f| {
+            (
+                f.namespace,
+                f.access,
+                f.name.as_str(),
+                f.params,
+                f.func.get_script_fn_def().expect("scripted function"),
+            )
+        })
     }
 
     /// Get an iterator over all script-defined functions in the [`Module`].
@@ -1359,9 +1346,8 @@ impl Module {
     pub fn iter_script_fn_info(
         &self,
     ) -> impl Iterator<Item = (FnNamespace, FnAccess, &str, usize)> {
-        self.functions
-            .values()
-            .filter(|f| f.func.is_script())
+        self.iter_fn()
+            .filter(|&f| f.func.is_script())
             .map(|f| (f.namespace, f.access, f.name.as_str(), f.params))
     }
 
@@ -1462,13 +1448,12 @@ impl Module {
         #[cfg(not(feature = "no_function"))]
         if ast.has_functions() {
             ast.shared_lib()
-                .functions
-                .values()
-                .filter(|f| match f.access {
+                .iter_fn()
+                .filter(|&f| match f.access {
                     FnAccess::Public => true,
                     FnAccess::Private => false,
                 })
-                .filter(|f| f.func.is_script())
+                .filter(|&f| f.func.is_script())
                 .for_each(|f| {
                     // Encapsulate AST environment
                     let mut func = f

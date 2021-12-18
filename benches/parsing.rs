@@ -79,7 +79,7 @@ fn bench_parse_primes(bench: &mut Bencher) {
             
             let total_primes_found = 0;
             
-            for p in range(2, MAX_NUMBER_TO_CHECK) {
+            for p in 2..=MAX_NUMBER_TO_CHECK {
                 if prime_mask[p] {
                     print(p);
             

@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, Dynamic, StaticVec, INT};
+use crate::{def_package, Dynamic, ExclusiveRange, InclusiveRange, StaticVec, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{any::TypeId, mem};
@@ -302,6 +302,26 @@ mod string_functions {
         }
     }
 
+    #[rhai_fn(name = "sub_string")]
+    pub fn sub_string_range(
+        ctx: NativeCallContext,
+        string: &str,
+        range: ExclusiveRange,
+    ) -> ImmutableString {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        sub_string(ctx, string, start, end - start)
+    }
+    #[rhai_fn(name = "sub_string")]
+    pub fn sub_string_inclusive_range(
+        ctx: NativeCallContext,
+        string: &str,
+        range: InclusiveRange,
+    ) -> ImmutableString {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        sub_string(ctx, string, start, end - start + 1)
+    }
     pub fn sub_string(
         ctx: NativeCallContext,
         string: &str,
@@ -365,6 +385,18 @@ mod string_functions {
         }
     }
 
+    #[rhai_fn(name = "crop")]
+    pub fn crop_range(string: &mut ImmutableString, range: ExclusiveRange) {
+        let start = INT::max(range.start, 0);
+        let end = INT::max(range.end, start);
+        crop(string, start, end - start)
+    }
+    #[rhai_fn(name = "crop")]
+    pub fn crop_inclusive_range(string: &mut ImmutableString, range: InclusiveRange) {
+        let start = INT::max(*range.start(), 0);
+        let end = INT::max(*range.end(), start);
+        crop(string, start, end - start + 1)
+    }
     #[rhai_fn(name = "crop")]
     pub fn crop(string: &mut ImmutableString, start: INT, len: INT) {
         if string.is_empty() {

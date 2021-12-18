@@ -9,6 +9,10 @@ fn test_string() -> Result<(), Box<EvalAltResult>> {
         "Test string: ❤"
     );
     assert_eq!(
+        engine.eval::<String>(r#""Test string: ""\u2764""""#)?,
+        r#"Test string: "❤""#
+    );
+    assert_eq!(
         engine.eval::<String>("\"Test\rstring: \\u2764\"")?,
         "Test\rstring: ❤"
     );
@@ -23,6 +27,10 @@ fn test_string() -> Result<(), Box<EvalAltResult>> {
     assert_eq!(
         engine.eval::<String>("     `Test string: \\u2764\nhello,\\nworld!`")?,
         "Test string: \\u2764\nhello,\\nworld!"
+    );
+    assert_eq!(
+        engine.eval::<String>(r#"     `Test string: \\u2764\n``hello``,\\n"world"!`"#)?,
+        r#"Test string: \\u2764\n`hello`,\\n"world"!"#
     );
     assert_eq!(
         engine.eval::<String>("     `\nTest string: \\u2764\nhello,\\nworld!`")?,

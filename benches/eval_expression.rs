@@ -110,7 +110,7 @@ fn bench_eval_call(bench: &mut Bencher) {
 fn bench_eval_loop_number(bench: &mut Bencher) {
     let script = r#"
         let s = 0;
-        for x in range(0, 10000) {
+        for x in 0..10000 {
             s += 1;
         }
     "#;
@@ -127,7 +127,7 @@ fn bench_eval_loop_number(bench: &mut Bencher) {
 fn bench_eval_loop_strings_build(bench: &mut Bencher) {
     let script = r#"
         let s;
-        for x in range(0, 10000) {
+        for x in 0..10000 {
             s = "hello, world!" + "hello, world!";
         }
     "#;
@@ -144,7 +144,7 @@ fn bench_eval_loop_strings_build(bench: &mut Bencher) {
 fn bench_eval_loop_strings_no_build(bench: &mut Bencher) {
     let script = r#"
         let s;
-        for x in range(0, 10000) {
+        for x in 0..10000 {
             s = "hello" + "";
         }
     "#;
@@ -163,7 +163,7 @@ fn bench_eval_switch(bench: &mut Bencher) {
         let sum = 0;
         let rem = 0;
 
-        for x in range(0, 10) {
+        for x in 0..10 {
             rem = x % 10;
 
             sum += switch rem {
@@ -195,7 +195,7 @@ fn bench_eval_nested_if(bench: &mut Bencher) {
         let sum = 0;
         let rem = 0;
 
-        for x in range(0, 10) {
+        for x in 0..10 {
             rem = x % 10;
 
             sum += if rem == 0 { 10 }

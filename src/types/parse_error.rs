@@ -108,6 +108,8 @@ pub enum ParseErrorType {
     DuplicatedSwitchCase,
     /// A variable name is duplicated. Wrapped value is the variable name.
     DuplicatedVariable(String),
+    /// An integer case of a `switch` statement is after a range case.
+    WrongSwitchIntegerCase,
     /// The default case of a `switch` statement is not the last.
     WrongSwitchDefaultCase,
     /// The case condition of a `switch` statement is not appropriate.
@@ -260,8 +262,9 @@ impl fmt::Display for ParseErrorType {
             Self::LiteralTooLarge(typ, max) => write!(f, "{} exceeds the maximum limit ({})", typ, max),
             Self::Reserved(s) => write!(f, "'{}' is a reserved keyword", s),
             Self::UnexpectedEOF => f.write_str("Script is incomplete"),
-            Self::WrongSwitchDefaultCase => f.write_str("Default switch case is not the last"),
-            Self::WrongSwitchCaseCondition => f.write_str("Default switch case cannot have condition"),
+            Self::WrongSwitchIntegerCase => f.write_str("Integer switch case cannot follow a range case"),
+            Self::WrongSwitchDefaultCase => f.write_str("Default switch case must be the last"),
+            Self::WrongSwitchCaseCondition => f.write_str("This switch case cannot have a condition"),
             Self::PropertyExpected => f.write_str("Expecting name of a property"),
             Self::VariableExpected => f.write_str("Expecting name of a variable"),
             Self::WrongFnDefinition => f.write_str("Function definitions must be at global level and cannot be inside a block or another function"),

@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::plugin::*;
-use crate::{def_package, EvalAltResult, INT};
+use crate::{def_package, EvalAltResult, ExclusiveRange, InclusiveRange, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
@@ -256,6 +256,21 @@ mod bit_field_functions {
             Err(EvalAltResult::ErrorBitFieldBounds(BITS, index, Position::NONE).into())
         }
     }
+    #[rhai_fn(name = "get_bits", return_raw)]
+    pub fn get_bits_range(value: INT, range: ExclusiveRange) -> Result<INT, Box<EvalAltResult>> {
+        let from = INT::max(range.start, 0);
+        let to = INT::max(range.end, from);
+        get_bits(value, from, to - from)
+    }
+    #[rhai_fn(name = "get_bits", return_raw)]
+    pub fn get_bits_range_inclusive(
+        value: INT,
+        range: InclusiveRange,
+    ) -> Result<INT, Box<EvalAltResult>> {
+        let from = INT::max(*range.start(), 0);
+        let to = INT::max(*range.end(), from - 1);
+        get_bits(value, from, to - from + 1)
+    }
     #[rhai_fn(return_raw)]
     pub fn get_bits(value: INT, index: INT, bits: INT) -> Result<INT, Box<EvalAltResult>> {
         if bits < 1 {
@@ -297,6 +312,26 @@ mod bit_field_functions {
         }
 
         Ok(((value & (mask << index)) >> index) & mask)
+    }
+    #[rhai_fn(name = "set_bits", return_raw)]
+    pub fn set_bits_range(
+        value: &mut INT,
+        range: ExclusiveRange,
+        new_value: INT,
+    ) -> Result<(), Box<EvalAltResult>> {
+        let from = INT::max(range.start, 0);
+        let to = INT::max(range.end, from);
+        set_bits(value, from, to - from, new_value)
+    }
+    #[rhai_fn(name = "set_bits", return_raw)]
+    pub fn set_bits_range_inclusive(
+        value: &mut INT,
+        range: InclusiveRange,
+        new_value: INT,
+    ) -> Result<(), Box<EvalAltResult>> {
+        let from = INT::max(*range.start(), 0);
+        let to = INT::max(*range.end(), from - 1);
+        set_bits(value, from, to - from + 1, new_value)
     }
     #[rhai_fn(return_raw)]
     pub fn set_bits(

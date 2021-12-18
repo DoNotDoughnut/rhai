@@ -7,6 +7,33 @@ fn test_switch() -> Result<(), Box<EvalAltResult>> {
     scope.push("x", 42 as INT);
 
     assert_eq!(
+        engine.eval::<char>("switch 2 { 1 => (), 2 => 'a', 42 => true }")?,
+        'a'
+    );
+    assert_eq!(
+        engine.eval::<()>("switch 3 { 1 => (), 2 => 'a', 42 => true }")?,
+        ()
+    );
+    assert_eq!(
+        engine.eval::<INT>("switch 3 { 1 => (), 2 => 'a', 42 => true, _ => 123 }")?,
+        123
+    );
+    assert_eq!(
+        engine.eval_with_scope::<INT>(
+            &mut scope,
+            "switch 2 { 1 => (), 2 if x < 40 => 'a', 42 => true, _ => 123 }"
+        )?,
+        123
+    );
+    assert_eq!(
+        engine.eval_with_scope::<char>(
+            &mut scope,
+            "switch 2 { 1 => (), 2 if x > 40 => 'a', 42 => true, _ => 123 }"
+        )?,
+        'a'
+    );
+
+    assert_eq!(
         engine.eval_with_scope::<bool>(&mut scope, "switch x { 1 => (), 2 => 'a', 42 => true }")?,
         true
     );
@@ -209,4 +236,67 @@ mod test_switch_enum {
 
         Ok(())
     }
+}
+
+#[test]
+fn test_switch_ranges() -> Result<(), Box<EvalAltResult>> {
+    let engine = Engine::new();
+    let mut scope = Scope::new();
+    scope.push("x", 42 as INT);
+
+    assert_eq!(
+        engine.eval_with_scope::<char>(
+            &mut scope,
+            "switch x { 10..20 => (), 20..=42 => 'a', 25..45 => 'z', 30..100 => true }"
+        )?,
+        'a'
+    );
+    assert_eq!(
+        engine.eval_with_scope::<char>(
+            &mut scope,
+            "switch x { 10..20 => (), 20..=42 if x < 40 => 'a', 25..45 => 'z', 30..100 => true }"
+        )?,
+        'z'
+    );
+    assert_eq!(
+        engine.eval_with_scope::<char>(
+            &mut scope,
+            "switch x { 42 => 'x', 10..20 => (), 20..=42 => 'a', 25..45 => 'z', 30..100 => true, 'w' => true }"
+        )?,
+        'x'
+    );
+    assert!(matches!(
+        *engine.compile("switch x { 10..20 => (), 20..=42 => 'a', 25..45 => 'z', 42 => 'x', 30..100 => true }")
+            .expect_err("should error").0,
+        ParseErrorType::WrongSwitchIntegerCase
+    ));
+    assert_eq!(
+        engine.eval_with_scope::<char>(
+            &mut scope,
+            "
+                switch 5 {
+                    'a' => true,
+                    0..10 if x+2==1+2 => print(40+2),
+                    _ => 'x'
+                }
+            "
+        )?,
+        'x'
+    );
+    assert_eq!(
+        engine.eval_with_scope::<char>(
+            &mut scope,
+            "
+                switch 5 {
+                    'a' => true,
+                    0..10 if x+2==1+2 => print(40+2),
+                    2..12 => 'z',
+                    _ => 'x'
+                }
+            "
+        )?,
+        'z'
+    );
+
+    Ok(())
 }

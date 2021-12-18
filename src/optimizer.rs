@@ -9,14 +9,10 @@ use crate::func::builtin::get_builtin_binary_op_fn;
 use crate::func::hashing::get_hasher;
 use crate::tokenizer::Token;
 use crate::types::dynamic::AccessMode;
-use crate::{
-    calc_fn_hash, calc_fn_params_hash, combine_hashes, Dynamic, Engine, FnPtr, Position, Scope,
-    StaticVec, AST,
-};
+use crate::{calc_fn_hash, Dynamic, Engine, FnPtr, Position, Scope, StaticVec, AST, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
-    any::TypeId,
     convert::TryFrom,
     hash::{Hash, Hasher},
     mem,
@@ -154,17 +150,6 @@ impl<'a> OptimizerState<'a> {
             )
             .ok()
             .map(|(v, _)| v)
-    }
-    // Has a system function a Rust-native override?
-    pub fn has_native_fn_override(&self, hash_script: u64, arg_types: &[TypeId]) -> bool {
-        let hash_params = calc_fn_params_hash(arg_types.iter().cloned());
-        let hash = combine_hashes(hash_script, hash_params);
-
-        // First check the global namespace and packages, but skip modules that are standard because
-        // they should never conflict with system functions.
-        self.engine.global_modules.iter().filter(|m| !m.standard).any(|m| m.contains_fn(hash))
-            // Then check sub-modules
-            || self.engine.global_sub_modules.values().any(|m| m.contains_qualified_fn(hash))
     }
 }
 
@@ -304,11 +289,9 @@ fn optimize_stmt_block(
                         if reduce_return && !options.contains(AST_OPTION_BREAK_OUT) =>
                     {
                         state.set_dirty();
-                        *statements.last_mut().expect(">= 2 elements") = if let Some(expr) = expr {
-                            Stmt::Expr(mem::take(expr))
-                        } else {
-                            Stmt::Noop(pos)
-                        };
+                        *statements.last_mut().expect(">= 2 elements") = expr
+                            .as_mut()
+                            .map_or_else(|| Stmt::Noop(pos), |e| Stmt::Expr(mem::take(e)));
                     }
                     // { ...; stmt; noop } -> done
                     [.., ref second_last_stmt, Stmt::Noop(_)]
@@ -480,21 +463,21 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
             value.hash(hasher);
             let hash = hasher.finish();
 
-            state.set_dirty();
             let table = &mut x.0;
 
+            // First check hashes
             if let Some(block) = table.get_mut(&hash) {
                 if let Some(mut condition) = mem::take(&mut block.0) {
                     // switch const { case if condition => stmt, _ => def } => if condition { stmt } else { def }
                     optimize_expr(&mut condition, state, false);
 
-                    let def_block = mem::take(&mut *x.1);
-                    let def_stmt = optimize_stmt_block(def_block, state, true, true, false);
                     let def_pos = if x.1.position().is_none() {
                         *pos
                     } else {
                         x.1.position()
                     };
+                    let def_stmt =
+                        optimize_stmt_block(mem::take(&mut *x.1), state, true, true, false);
 
                     *stmt = Stmt::If(
                         condition,
@@ -507,46 +490,121 @@ fn optimize_stmt(stmt: &mut Stmt, state: &mut OptimizerState, preserve_result: b
                 } else {
                     // Promote the matched case
                     let new_pos = block.1.position();
-                    let statements = mem::take(&mut *block.1);
-                    let statements = optimize_stmt_block(statements, state, true, true, false);
+                    let statements =
+                        optimize_stmt_block(mem::take(&mut *block.1), state, true, true, false);
                     *stmt = Stmt::Block(statements.into_boxed_slice(), new_pos);
                 }
-            } else {
-                // Promote the default case
-                let def_block = mem::take(&mut *x.1);
-                let def_stmt = optimize_stmt_block(def_block, state, true, true, false);
-                let def_pos = if x.1.position().is_none() {
-                    *pos
-                } else {
-                    x.1.position()
-                };
-                *stmt = Stmt::Block(def_stmt.into_boxed_slice(), def_pos);
+
+                state.set_dirty();
+                return;
             }
+
+            // Then check ranges
+            let ranges = &mut x.2;
+
+            if value.is::<INT>() && !ranges.is_empty() {
+                let value = value.as_int().expect("`INT`");
+
+                // Only one range or all ranges without conditions
+                if ranges.len() == 1 || ranges.iter().all(|(_, _, _, c, _)| c.is_none()) {
+                    for (_, _, _, condition, stmt_block) in
+                        ranges
+                            .iter_mut()
+                            .filter(|&&mut (start, end, inclusive, _, _)| {
+                                (!inclusive && (start..end).contains(&value))
+                                    || (inclusive && (start..=end).contains(&value))
+                            })
+                    {
+                        if let Some(mut condition) = mem::take(condition) {
+                            // switch const { range if condition => stmt, _ => def } => if condition { stmt } else { def }
+                            optimize_expr(&mut condition, state, false);
+
+                            let def_block = mem::take(&mut *x.1);
+                            let def_stmt = optimize_stmt_block(def_block, state, true, true, false);
+                            let def_pos = if x.1.position().is_none() {
+                                *pos
+                            } else {
+                                x.1.position()
+                            };
+
+                            *stmt = Stmt::If(
+                                condition,
+                                Box::new((
+                                    mem::take(stmt_block),
+                                    Stmt::Block(def_stmt.into_boxed_slice(), def_pos).into(),
+                                )),
+                                match_expr.position(),
+                            );
+                        } else {
+                            // Promote the matched case
+                            let new_pos = stmt_block.position();
+                            let statements = mem::take(&mut **stmt_block);
+                            let statements =
+                                optimize_stmt_block(statements, state, true, true, false);
+                            *stmt = Stmt::Block(statements.into_boxed_slice(), new_pos);
+                        }
+
+                        state.set_dirty();
+                        return;
+                    }
+                } else {
+                    // Multiple ranges - clear the table and just keep the right ranges
+                    if !table.is_empty() {
+                        state.set_dirty();
+                    }
+
+                    table.clear();
+
+                    let old_ranges_len = ranges.len();
+
+                    ranges.retain(|&mut (start, end, inclusive, _, _)| {
+                        (!inclusive && (start..end).contains(&value))
+                            || (inclusive && (start..=end).contains(&value))
+                    });
+
+                    if ranges.len() != old_ranges_len {
+                        state.set_dirty();
+                    }
+
+                    for (_, _, _, condition, stmt_block) in ranges.iter_mut() {
+                        let statements = mem::take(&mut **stmt_block);
+                        **stmt_block =
+                            optimize_stmt_block(statements, state, preserve_result, true, false);
+
+                        if let Some(mut c) = mem::take(condition) {
+                            optimize_expr(&mut c, state, false);
+                            match c {
+                                Expr::Unit(_) | Expr::BoolConstant(true, _) => state.set_dirty(),
+                                _ => *condition = Some(c),
+                            }
+                        }
+                    }
+                    return;
+                }
+            }
+
+            // Promote the default case
+            state.set_dirty();
+            let def_pos = if x.1.position().is_none() {
+                *pos
+            } else {
+                x.1.position()
+            };
+            let def_stmt = optimize_stmt_block(mem::take(&mut *x.1), state, true, true, false);
+            *stmt = Stmt::Block(def_stmt.into_boxed_slice(), def_pos);
         }
         // switch
         Stmt::Switch(match_expr, x, _) => {
             optimize_expr(match_expr, state, false);
             x.0.values_mut().for_each(|block| {
-                let condition = mem::take(&mut block.0).map_or_else(
-                    || Expr::Unit(Position::NONE),
-                    |mut condition| {
-                        optimize_expr(&mut condition, state, false);
-                        condition
-                    },
-                );
+                let statements = mem::take(block.1.deref_mut());
+                *block.1 = optimize_stmt_block(statements, state, preserve_result, true, false);
 
-                match condition {
-                    Expr::Unit(_) | Expr::BoolConstant(true, _) => (),
-                    _ => {
-                        block.0 = Some(condition);
-
-                        *block.1 = optimize_stmt_block(
-                            mem::take(block.1.deref_mut()),
-                            state,
-                            preserve_result,
-                            true,
-                            false,
-                        );
+                if let Some(mut condition) = mem::take(&mut block.0) {
+                    optimize_expr(&mut condition, state, false);
+                    match condition {
+                        Expr::Unit(_) | Expr::BoolConstant(true, _) => state.set_dirty(),
+                        _ => block.0 = Some(condition),
                     }
                 }
             });
@@ -992,7 +1050,7 @@ fn optimize_expr(expr: &mut Expr, state: &mut OptimizerState, chaining: bool) {
                     return;
                 }
                 // Overloaded operators can override built-in.
-                _ if x.args.len() == 2 && !state.has_native_fn_override(x.hashes.native, arg_types.as_ref()) => {
+                _ if x.args.len() == 2 && !state.engine.has_native_fn_override(x.hashes.native, arg_types.as_ref()) => {
                     if let Some(result) = get_builtin_binary_op_fn(x.name.as_ref(), &arg_values[0], &arg_values[1])
                         .and_then(|f| {
                             #[cfg(not(feature = "no_function"))]

@@ -10,9 +10,9 @@ use crate::{
     Engine, Identifier, ImmutableString, LexError, ParseError, Position, RhaiResult, Shared,
     StaticVec, INT,
 };
-use std::any::TypeId;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
+use std::{any::TypeId, ops::Deref};
 
 /// Collection of special markers for custom syntax definition.
 pub mod markers {
@@ -71,12 +71,6 @@ impl Expression<'_> {
     pub fn get_variable_name(&self) -> Option<&str> {
         self.0.get_variable_name(true)
     }
-    /// Get the expression.
-    #[inline(always)]
-    #[must_use]
-    pub(crate) const fn expr(&self) -> &Expr {
-        &self.0
-    }
     /// Get the position of this expression.
     #[inline(always)]
     #[must_use]
@@ -134,6 +128,22 @@ impl Expression<'_> {
     }
 }
 
+impl AsRef<Expr> for Expression<'_> {
+    #[inline(always)]
+    fn as_ref(&self) -> &Expr {
+        &self.0
+    }
+}
+
+impl Deref for Expression<'_> {
+    type Target = Expr;
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_> {
     /// Evaluate an [expression tree][Expression].
     ///
@@ -148,7 +158,7 @@ impl EvalContext<'_, '_, '_, '_, '_, '_, '_, '_> {
             self.state,
             self.lib,
             self.this_ptr,
-            expr.expr(),
+            expr,
             self.level,
         )
     }

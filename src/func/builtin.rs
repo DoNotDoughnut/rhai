@@ -352,6 +352,16 @@ pub fn get_builtin_binary_op_fn(
             "&" => Some(impl_op!(INT => as_int & as_int)),
             "|" => Some(impl_op!(INT => as_int | as_int)),
             "^" => Some(impl_op!(INT => as_int ^ as_int)),
+            ".." => Some(|_, args| {
+                let x = args[0].as_int().expect(BUILTIN);
+                let y = args[1].as_int().expect(BUILTIN);
+                Ok((x..y).into())
+            }),
+            "..=" => Some(|_, args| {
+                let x = args[0].as_int().expect(BUILTIN);
+                let y = args[1].as_int().expect(BUILTIN);
+                Ok((x..=y).into())
+            }),
             _ => None,
         };
     }

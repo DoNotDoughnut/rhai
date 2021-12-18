@@ -2,7 +2,7 @@
 
 use crate::func::native::SendSync;
 use crate::r#unsafe::{unsafe_cast_box, unsafe_try_cast};
-use crate::{FnPtr, ImmutableString, INT};
+use crate::{ExclusiveRange, FnPtr, ImmutableString, InclusiveRange, INT};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 use std::{
@@ -12,18 +12,6 @@ use std::{
     ops::{Deref, DerefMut},
     str::FromStr,
 };
-
-#[cfg(not(feature = "no_float"))]
-use crate::{ast::FloatWrapper, FLOAT};
-
-#[cfg(feature = "decimal")]
-use rust_decimal::Decimal;
-
-#[cfg(not(feature = "no_index"))]
-use crate::{Array, Blob};
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
 
 /// The message: data type was checked
 const CHECKED: &str = "data type was checked";
@@ -181,26 +169,26 @@ pub enum Union {
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    Float(FloatWrapper<FLOAT>, Tag, AccessMode),
+    Float(crate::ast::FloatWrapper<crate::FLOAT>, Tag, AccessMode),
     /// _(decimal)_ A fixed-precision decimal value.
     /// Exported under the `decimal` feature only.
     #[cfg(feature = "decimal")]
-    Decimal(Box<Decimal>, Tag, AccessMode),
+    Decimal(Box<rust_decimal::Decimal>, Tag, AccessMode),
     /// An array value.
     ///
     /// Not available under `no_index`.
     #[cfg(not(feature = "no_index"))]
-    Array(Box<Array>, Tag, AccessMode),
+    Array(Box<crate::Array>, Tag, AccessMode),
     /// An blob (byte array).
     ///
     /// Not available under `no_index`.
     #[cfg(not(feature = "no_index"))]
-    Blob(Box<Blob>, Tag, AccessMode),
+    Blob(Box<crate::Blob>, Tag, AccessMode),
     /// An object map value.
     ///
     /// Not available under `no_object`.
     #[cfg(not(feature = "no_object"))]
-    Map(Box<Map>, Tag, AccessMode),
+    Map(Box<crate::Map>, Tag, AccessMode),
     /// A function pointer.
     FnPtr(Box<FnPtr>, Tag, AccessMode),
 
@@ -393,15 +381,15 @@ impl Dynamic {
             Union::Char(_, _, _) => TypeId::of::<char>(),
             Union::Int(_, _, _) => TypeId::of::<INT>(),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(_, _, _) => TypeId::of::<FLOAT>(),
+            Union::Float(_, _, _) => TypeId::of::<crate::FLOAT>(),
             #[cfg(feature = "decimal")]
-            Union::Decimal(_, _, _) => TypeId::of::<Decimal>(),
+            Union::Decimal(_, _, _) => TypeId::of::<rust_decimal::Decimal>(),
             #[cfg(not(feature = "no_index"))]
-            Union::Array(_, _, _) => TypeId::of::<Array>(),
+            Union::Array(_, _, _) => TypeId::of::<crate::Array>(),
             #[cfg(not(feature = "no_index"))]
-            Union::Blob(_, _, _) => TypeId::of::<Blob>(),
+            Union::Blob(_, _, _) => TypeId::of::<crate::Blob>(),
             #[cfg(not(feature = "no_object"))]
-            Union::Map(_, _, _) => TypeId::of::<Map>(),
+            Union::Map(_, _, _) => TypeId::of::<crate::Map>(),
             Union::FnPtr(_, _, _) => TypeId::of::<FnPtr>(),
 
             Union::Variant(ref value, _, _) => (***value).type_id(),
@@ -430,7 +418,7 @@ impl Dynamic {
             Union::Char(_, _, _) => "char",
             Union::Int(_, _, _) => type_name::<INT>(),
             #[cfg(not(feature = "no_float"))]
-            Union::Float(_, _, _) => type_name::<FLOAT>(),
+            Union::Float(_, _, _) => type_name::<crate::FLOAT>(),
             #[cfg(feature = "decimal")]
             Union::Decimal(_, _, _) => "decimal",
             #[cfg(not(feature = "no_index"))]
@@ -557,20 +545,26 @@ pub(crate) fn map_std_type_name(name: &str) -> &str {
         return "Fn";
     }
     #[cfg(feature = "decimal")]
-    if name == type_name::<Decimal>() {
+    if name == type_name::<rust_decimal::Decimal>() {
         return "decimal";
     }
     #[cfg(not(feature = "no_index"))]
-    if name == type_name::<Array>() {
+    if name == type_name::<crate::Array>() {
         return "array";
     }
     #[cfg(not(feature = "no_index"))]
-    if name == type_name::<Blob>() {
+    if name == type_name::<crate::Blob>() {
         return "blob";
     }
     #[cfg(not(feature = "no_object"))]
-    if name == type_name::<Map>() {
+    if name == type_name::<crate::Map>() {
         return "map";
+    }
+    if name == type_name::<ExclusiveRange>() {
+        return "range";
+    }
+    if name == type_name::<InclusiveRange>() {
+        return "range=";
     }
 
     name
@@ -635,6 +629,14 @@ impl fmt::Display for Dynamic {
                     return fmt::Display::fmt(_value_any.downcast_ref::<u128>().expect(CHECKED), f);
                 } else if _type_id == TypeId::of::<i128>() {
                     return fmt::Display::fmt(_value_any.downcast_ref::<i128>().expect(CHECKED), f);
+                }
+
+                if _type_id == TypeId::of::<ExclusiveRange>() {
+                    let range = _value_any.downcast_ref::<ExclusiveRange>().expect(CHECKED);
+                    return write!(f, "{}..{}", range.start, range.end);
+                } else if _type_id == TypeId::of::<InclusiveRange>() {
+                    let range = _value_any.downcast_ref::<InclusiveRange>().expect(CHECKED);
+                    return write!(f, "{}..={}", range.start(), range.end());
                 }
 
                 f.write_str((***value).type_name())
@@ -717,6 +719,14 @@ impl fmt::Debug for Dynamic {
                     return fmt::Debug::fmt(_value_any.downcast_ref::<i128>().expect(CHECKED), f);
                 }
 
+                if _type_id == TypeId::of::<ExclusiveRange>() {
+                    let range = _value_any.downcast_ref::<ExclusiveRange>().expect(CHECKED);
+                    return write!(f, "{}..{}", range.start, range.end);
+                } else if _type_id == TypeId::of::<InclusiveRange>() {
+                    let range = _value_any.downcast_ref::<InclusiveRange>().expect(CHECKED);
+                    return write!(f, "{}..={}", range.start(), range.end());
+                }
+
                 f.write_str((***value).type_name())
             }
 
@@ -785,6 +795,13 @@ impl Default for Dynamic {
     }
 }
 
+#[cfg(not(feature = "no_float"))]
+#[cfg(feature = "f32_float")]
+use std::f32::consts as FloatConstants;
+#[cfg(not(feature = "no_float"))]
+#[cfg(not(feature = "f32_float"))]
+use std::f64::consts as FloatConstants;
+
 impl Dynamic {
     /// A [`Dynamic`] containing a `()`.
     pub const UNIT: Self = Self(Union::Unit((), DEFAULT_TAG_VALUE, ReadWrite));
@@ -794,20 +811,24 @@ impl Dynamic {
     pub const FALSE: Self = Self::from_bool(false);
     /// A [`Dynamic`] containing the integer zero.
     pub const ZERO: Self = Self::from_int(0);
-    /// A [`Dynamic`] containing the integer one.
+    /// A [`Dynamic`] containing the integer 1.
     pub const ONE: Self = Self::from_int(1);
-    /// A [`Dynamic`] containing the integer two.
+    /// A [`Dynamic`] containing the integer 2.
     pub const TWO: Self = Self::from_int(2);
-    /// A [`Dynamic`] containing the integer three.
+    /// A [`Dynamic`] containing the integer 3.
     pub const THREE: Self = Self::from_int(3);
-    /// A [`Dynamic`] containing the integer ten.
+    /// A [`Dynamic`] containing the integer 10.
     pub const TEN: Self = Self::from_int(10);
-    /// A [`Dynamic`] containing the integer one hundred.
+    /// A [`Dynamic`] containing the integer 100.
     pub const HUNDRED: Self = Self::from_int(100);
-    /// A [`Dynamic`] containing the integer one thousand.
+    /// A [`Dynamic`] containing the integer 1,000.
     pub const THOUSAND: Self = Self::from_int(1000);
-    /// A [`Dynamic`] containing the integer negative one.
+    /// A [`Dynamic`] containing the integer 1,000,000.
+    pub const MILLION: Self = Self::from_int(1000000);
+    /// A [`Dynamic`] containing the integer -1.
     pub const NEGATIVE_ONE: Self = Self::from_int(-1);
+    /// A [`Dynamic`] containing the integer -2.
+    pub const NEGATIVE_TWO: Self = Self::from_int(-2);
     /// A [`Dynamic`] containing `0.0`.
     ///
     /// Not available under `no_float`.
@@ -838,54 +859,97 @@ impl Dynamic {
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     pub const FLOAT_THOUSAND: Self = Self::from_float(1000.0);
+    /// A [`Dynamic`] containing `1000000.0`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_MILLION: Self = Self::from_float(1000000.0);
     /// A [`Dynamic`] containing `-1.0`.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     pub const FLOAT_NEGATIVE_ONE: Self = Self::from_float(-1.0);
+    /// A [`Dynamic`] containing `-2.0`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_NEGATIVE_TWO: Self = Self::from_float(-2.0);
+    /// A [`Dynamic`] containing `0.5`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_HALF: Self = Self::from_float(0.5);
+    /// A [`Dynamic`] containing `0.25`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_QUARTER: Self = Self::from_float(0.25);
+    /// A [`Dynamic`] containing `0.2`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_FIFTH: Self = Self::from_float(0.2);
+    /// A [`Dynamic`] containing `0.1`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_TENTH: Self = Self::from_float(0.1);
+    /// A [`Dynamic`] containing `0.01`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_HUNDREDTH: Self = Self::from_float(0.01);
+    /// A [`Dynamic`] containing `0.001`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_THOUSANDTH: Self = Self::from_float(0.001);
+    /// A [`Dynamic`] containing `0.000001`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_MILLIONTH: Self = Self::from_float(0.000001);
     /// A [`Dynamic`] containing π.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     #[cfg(not(feature = "f32_float"))]
-    pub const FLOAT_PI: Self = Self::from_float(
-        #[cfg(not(feature = "f32_float"))]
-        {
-            std::f64::consts::PI
-        },
-        #[cfg(feature = "f32_float")]
-        {
-            std::f32::consts::PI
-        },
-    );
+    pub const FLOAT_PI: Self = Self::from_float(FloatConstants::PI);
     /// A [`Dynamic`] containing π/2.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_HALF_PI: Self = Self::from_float(
-        #[cfg(not(feature = "f32_float"))]
-        {
-            std::f64::consts::PI / 2.0
-        },
-        #[cfg(feature = "f32_float")]
-        {
-            std::f32::consts::PI / 2.0
-        },
-    );
+    pub const FLOAT_HALF_PI: Self = Self::from_float(FloatConstants::FRAC_PI_2);
+    /// A [`Dynamic`] containing π/4.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_QUARTER_PI: Self = Self::from_float(FloatConstants::FRAC_PI_4);
     /// A [`Dynamic`] containing 2π.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
-    pub const FLOAT_TWO_PI: Self = Self::from_float(
-        #[cfg(not(feature = "f32_float"))]
-        {
-            std::f64::consts::PI * 2.0
-        },
-        #[cfg(feature = "f32_float")]
-        {
-            std::f32::consts::PI * 2.0
-        },
-    );
+    pub const FLOAT_TWO_PI: Self = Self::from_float(FloatConstants::TAU);
+    /// A [`Dynamic`] containing 1/π.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_INVERSE_PI: Self = Self::from_float(FloatConstants::FRAC_1_PI);
+    /// A [`Dynamic`] containing _e_.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_E: Self = Self::from_float(FloatConstants::E);
+    /// A [`Dynamic`] containing `log` _e_.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_LOG_E: Self = Self::from_float(FloatConstants::LOG10_E);
+    /// A [`Dynamic`] containing `ln 10`.
+    ///
+    /// Not available under `no_float`.
+    #[cfg(not(feature = "no_float"))]
+    pub const FLOAT_LN_10: Self = Self::from_float(FloatConstants::LN_10);
 
     /// Create a new [`Dynamic`] from a [`bool`].
     #[inline(always)]
@@ -902,14 +966,14 @@ impl Dynamic {
     pub const fn from_char(value: char) -> Self {
         Self(Union::Char(value, DEFAULT_TAG_VALUE, ReadWrite))
     }
-    /// Create a new [`Dynamic`] from a [`FLOAT`].
+    /// Create a new [`Dynamic`] from a [`FLOAT`][crate::FLOAT].
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     #[inline(always)]
-    pub const fn from_float(value: FLOAT) -> Self {
+    pub const fn from_float(value: crate::FLOAT) -> Self {
         Self(Union::Float(
-            FloatWrapper::new_const(value),
+            crate::ast::FloatWrapper::new_const(value),
             DEFAULT_TAG_VALUE,
             ReadWrite,
         ))
@@ -919,7 +983,7 @@ impl Dynamic {
     /// Exported under the `decimal` feature only.
     #[cfg(feature = "decimal")]
     #[inline(always)]
-    pub fn from_decimal(value: Decimal) -> Self {
+    pub fn from_decimal(value: rust_decimal::Decimal) -> Self {
         Self(Union::Decimal(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
 
@@ -1055,12 +1119,12 @@ impl Dynamic {
     ///
     /// # Notes
     ///
-    /// Beware that you need to pass in an [`Array`] type for it to be recognized as an [`Array`].
-    /// A [`Vec<T>`][Vec] does not get automatically converted to an [`Array`], but will be a generic
+    /// Beware that you need to pass in an [`Array`][crate::Array] type for it to be recognized as an [`Array`][crate::Array].
+    /// A [`Vec<T>`][Vec] does not get automatically converted to an [`Array`][crate::Array], but will be a generic
     /// restricted trait object instead, because [`Vec<T>`][Vec] is not a supported standard type.
     ///
     /// Similarly, passing in a [`HashMap<String, T>`][std::collections::HashMap] or
-    /// [`BTreeMap<String, T>`][std::collections::BTreeMap] will not get a [`Map`] but a trait object.
+    /// [`BTreeMap<String, T>`][std::collections::BTreeMap] will not get a [`Map`][crate::Map] but a trait object.
     ///
     /// # Examples
     ///
@@ -1094,12 +1158,12 @@ impl Dynamic {
             return (*val.downcast_ref::<INT>().expect(CHECKED)).into();
         }
         #[cfg(not(feature = "no_float"))]
-        if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
-            return (*val.downcast_ref::<FLOAT>().expect(CHECKED)).into();
+        if TypeId::of::<T>() == TypeId::of::<crate::FLOAT>() {
+            return (*val.downcast_ref::<crate::FLOAT>().expect(CHECKED)).into();
         }
         #[cfg(feature = "decimal")]
-        if TypeId::of::<T>() == TypeId::of::<Decimal>() {
-            return (*val.downcast_ref::<Decimal>().expect(CHECKED)).into();
+        if TypeId::of::<T>() == TypeId::of::<rust_decimal::Decimal>() {
+            return (*val.downcast_ref::<rust_decimal::Decimal>().expect(CHECKED)).into();
         }
         if TypeId::of::<T>() == TypeId::of::<bool>() {
             return (*val.downcast_ref::<bool>().expect(CHECKED)).into();
@@ -1127,14 +1191,14 @@ impl Dynamic {
         };
         #[cfg(not(feature = "no_index"))]
         {
-            value = match unsafe_try_cast::<_, Array>(value) {
+            value = match unsafe_try_cast::<_, crate::Array>(value) {
                 Ok(array) => return array.into(),
                 Err(value) => value,
             };
         }
         #[cfg(not(feature = "no_index"))]
         {
-            value = match unsafe_try_cast::<_, Blob>(value) {
+            value = match unsafe_try_cast::<_, crate::Blob>(value) {
                 Ok(blob) => return Self(Union::Blob(Box::new(blob), DEFAULT_TAG_VALUE, ReadWrite)),
                 Err(value) => value,
             };
@@ -1142,7 +1206,7 @@ impl Dynamic {
 
         #[cfg(not(feature = "no_object"))]
         {
-            value = match unsafe_try_cast::<_, Map>(value) {
+            value = match unsafe_try_cast::<_, crate::Map>(value) {
                 Ok(map) => return map.into(),
                 Err(value) => value,
             };
@@ -1241,7 +1305,7 @@ impl Dynamic {
         }
 
         #[cfg(not(feature = "no_float"))]
-        if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::FLOAT>() {
             return match self.0 {
                 Union::Float(value, _, _) => unsafe_try_cast(*value).ok(),
                 _ => None,
@@ -1249,7 +1313,7 @@ impl Dynamic {
         }
 
         #[cfg(feature = "decimal")]
-        if TypeId::of::<T>() == TypeId::of::<Decimal>() {
+        if TypeId::of::<T>() == TypeId::of::<rust_decimal::Decimal>() {
             return match self.0 {
                 Union::Decimal(value, _, _) => unsafe_try_cast(*value).ok(),
                 _ => None,
@@ -1285,7 +1349,7 @@ impl Dynamic {
         }
 
         #[cfg(not(feature = "no_index"))]
-        if TypeId::of::<T>() == TypeId::of::<Array>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Array>() {
             return match self.0 {
                 Union::Array(value, _, _) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
                 _ => None,
@@ -1293,7 +1357,7 @@ impl Dynamic {
         }
 
         #[cfg(not(feature = "no_index"))]
-        if TypeId::of::<T>() == TypeId::of::<Blob>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Blob>() {
             return match self.0 {
                 Union::Blob(value, _, _) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
                 _ => None,
@@ -1301,7 +1365,7 @@ impl Dynamic {
         }
 
         #[cfg(not(feature = "no_object"))]
-        if TypeId::of::<T>() == TypeId::of::<Map>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Map>() {
             return match self.0 {
                 Union::Map(value, _, _) => unsafe_cast_box::<_, T>(value).ok().map(|v| *v),
                 _ => None,
@@ -1587,14 +1651,14 @@ impl Dynamic {
             };
         }
         #[cfg(not(feature = "no_float"))]
-        if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::FLOAT>() {
             return match self.0 {
                 Union::Float(ref value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         #[cfg(feature = "decimal")]
-        if TypeId::of::<T>() == TypeId::of::<Decimal>() {
+        if TypeId::of::<T>() == TypeId::of::<rust_decimal::Decimal>() {
             return match self.0 {
                 Union::Decimal(ref value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
@@ -1619,21 +1683,21 @@ impl Dynamic {
             };
         }
         #[cfg(not(feature = "no_index"))]
-        if TypeId::of::<T>() == TypeId::of::<Array>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Array>() {
             return match self.0 {
                 Union::Array(ref value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_index"))]
-        if TypeId::of::<T>() == TypeId::of::<Blob>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Blob>() {
             return match self.0 {
                 Union::Blob(ref value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_object"))]
-        if TypeId::of::<T>() == TypeId::of::<Map>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Map>() {
             return match self.0 {
                 Union::Map(ref value, _, _) => value.as_ref().as_any().downcast_ref::<T>(),
                 _ => None,
@@ -1678,7 +1742,7 @@ impl Dynamic {
             };
         }
         #[cfg(not(feature = "no_float"))]
-        if TypeId::of::<T>() == TypeId::of::<FLOAT>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::FLOAT>() {
             return match self.0 {
                 Union::Float(ref mut value, _, _) => {
                     value.as_mut().as_mut_any().downcast_mut::<T>()
@@ -1687,7 +1751,7 @@ impl Dynamic {
             };
         }
         #[cfg(feature = "decimal")]
-        if TypeId::of::<T>() == TypeId::of::<Decimal>() {
+        if TypeId::of::<T>() == TypeId::of::<rust_decimal::Decimal>() {
             return match self.0 {
                 Union::Decimal(ref mut value, _, _) => {
                     value.as_mut().as_mut_any().downcast_mut::<T>()
@@ -1714,7 +1778,7 @@ impl Dynamic {
             };
         }
         #[cfg(not(feature = "no_index"))]
-        if TypeId::of::<T>() == TypeId::of::<Array>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Array>() {
             return match self.0 {
                 Union::Array(ref mut value, _, _) => {
                     value.as_mut().as_mut_any().downcast_mut::<T>()
@@ -1723,14 +1787,14 @@ impl Dynamic {
             };
         }
         #[cfg(not(feature = "no_index"))]
-        if TypeId::of::<T>() == TypeId::of::<Blob>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Blob>() {
             return match self.0 {
                 Union::Blob(ref mut value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
                 _ => None,
             };
         }
         #[cfg(not(feature = "no_object"))]
-        if TypeId::of::<T>() == TypeId::of::<Map>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Map>() {
             return match self.0 {
                 Union::Map(ref mut value, _, _) => value.as_mut().as_mut_any().downcast_mut::<T>(),
                 _ => None,
@@ -1783,13 +1847,13 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// Cast the [`Dynamic`] as the system floating-point type [`FLOAT`].
+    /// Cast the [`Dynamic`] as the system floating-point type [`FLOAT`][crate::FLOAT].
     /// Returns the name of the actual type if the cast fails.
     ///
     /// Not available under `no_float`.
     #[cfg(not(feature = "no_float"))]
     #[inline]
-    pub fn as_float(&self) -> Result<FLOAT, &'static str> {
+    pub fn as_float(&self) -> Result<crate::FLOAT, &'static str> {
         match self.0 {
             Union::Float(n, _, _) => Ok(*n),
             #[cfg(not(feature = "no_closure"))]
@@ -1797,13 +1861,13 @@ impl Dynamic {
             _ => Err(self.type_name()),
         }
     }
-    /// _(decimal)_ Cast the [`Dynamic`] as a [`Decimal`](https://docs.rs/rust_decimal).
+    /// _(decimal)_ Cast the [`Dynamic`] as a [`Decimal`][rust_decimal::Decimal].
     /// Returns the name of the actual type if the cast fails.
     ///
     /// Exported under the `decimal` feature only.
     #[cfg(feature = "decimal")]
     #[inline]
-    pub fn as_decimal(&self) -> Result<Decimal, &'static str> {
+    pub fn as_decimal(&self) -> Result<rust_decimal::Decimal, &'static str> {
         match self.0 {
             Union::Decimal(ref n, _, _) => Ok(**n),
             #[cfg(not(feature = "no_closure"))]
@@ -1898,23 +1962,23 @@ impl From<INT> for Dynamic {
     }
 }
 #[cfg(not(feature = "no_float"))]
-impl From<FLOAT> for Dynamic {
+impl From<crate::FLOAT> for Dynamic {
     #[inline(always)]
-    fn from(value: FLOAT) -> Self {
+    fn from(value: crate::FLOAT) -> Self {
         Self(Union::Float(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
 }
 #[cfg(not(feature = "no_float"))]
-impl From<FloatWrapper<FLOAT>> for Dynamic {
+impl From<crate::ast::FloatWrapper<crate::FLOAT>> for Dynamic {
     #[inline(always)]
-    fn from(value: FloatWrapper<FLOAT>) -> Self {
+    fn from(value: crate::ast::FloatWrapper<crate::FLOAT>) -> Self {
         Self(Union::Float(value, DEFAULT_TAG_VALUE, ReadWrite))
     }
 }
 #[cfg(feature = "decimal")]
-impl From<Decimal> for Dynamic {
+impl From<rust_decimal::Decimal> for Dynamic {
     #[inline(always)]
-    fn from(value: Decimal) -> Self {
+    fn from(value: rust_decimal::Decimal) -> Self {
         Self(Union::Decimal(value.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
 }
@@ -1945,9 +2009,9 @@ impl FromStr for Dynamic {
 }
 #[cfg(not(feature = "no_index"))]
 impl Dynamic {
-    /// Create a [`Dynamic`] from an [`Array`].
+    /// Create a [`Dynamic`] from an [`Array`][crate::Array].
     #[inline(always)]
-    pub(crate) fn from_array(array: Array) -> Self {
+    pub(crate) fn from_array(array: crate::Array) -> Self {
         Self(Union::Array(array.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
 }
@@ -1986,10 +2050,10 @@ impl<T: Variant + Clone> std::iter::FromIterator<T> for Dynamic {
 }
 #[cfg(not(feature = "no_index"))]
 impl Dynamic {
-    /// Convert the [`Dynamic`] into an [`Array`].
+    /// Convert the [`Dynamic`] into an [`Array`][crate::Array].
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
-    pub fn into_array(self) -> Result<Array, &'static str> {
+    pub fn into_array(self) -> Result<crate::Array, &'static str> {
         match self.0 {
             Union::Array(a, _, _) => Ok(*a),
             #[cfg(not(feature = "no_closure"))]
@@ -2067,13 +2131,13 @@ impl Dynamic {
 impl Dynamic {
     /// Create a [`Dynamic`] from a [`Vec<u8>`].
     #[inline(always)]
-    pub fn from_blob(blob: Blob) -> Self {
+    pub fn from_blob(blob: crate::Blob) -> Self {
         Self(Union::Blob(Box::new(blob), DEFAULT_TAG_VALUE, ReadWrite))
     }
     /// Convert the [`Dynamic`] into a [`Vec<u8>`].
     /// Returns the name of the actual type if the cast fails.
     #[inline(always)]
-    pub fn into_blob(self) -> Result<Blob, &'static str> {
+    pub fn into_blob(self) -> Result<crate::Blob, &'static str> {
         match self.0 {
             Union::Blob(a, _, _) => Ok(*a),
             #[cfg(not(feature = "no_closure"))]
@@ -2094,9 +2158,9 @@ impl Dynamic {
 }
 #[cfg(not(feature = "no_object"))]
 impl Dynamic {
-    /// Create a [`Dynamic`] from a [`Map`].
+    /// Create a [`Dynamic`] from a [`Map`][crate::Map].
     #[inline(always)]
-    pub(crate) fn from_map(map: Map) -> Self {
+    pub(crate) fn from_map(map: crate::Map) -> Self {
         Self(Union::Map(map.into(), DEFAULT_TAG_VALUE, ReadWrite))
     }
 }
@@ -2187,5 +2251,18 @@ impl From<crate::Shared<crate::Locked<Dynamic>>> for Dynamic {
     #[inline(always)]
     fn from(value: crate::Shared<crate::Locked<Self>>) -> Self {
         Self(Union::Shared(value, DEFAULT_TAG_VALUE, ReadWrite))
+    }
+}
+
+impl From<ExclusiveRange> for Dynamic {
+    #[inline(always)]
+    fn from(value: ExclusiveRange) -> Self {
+        Dynamic::from(value)
+    }
+}
+impl From<InclusiveRange> for Dynamic {
+    #[inline(always)]
+    fn from(value: InclusiveRange) -> Self {
+        Dynamic::from(value)
     }
 }

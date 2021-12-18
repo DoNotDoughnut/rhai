@@ -4,16 +4,11 @@ use crate::func::{FnCallArgs, RegisterNativeFunction, SendSync};
 use crate::types::dynamic::Variant;
 use crate::{
     Engine, EvalAltResult, FnAccess, FnNamespace, Identifier, Module, NativeCallContext, Shared,
+    SmartString,
 };
 use std::any::{type_name, TypeId};
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
-
-#[cfg(not(feature = "no_index"))]
-use crate::Array;
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
 
 impl Engine {
     /// Get the global namespace module (which is the last module in `global_modules`).
@@ -152,11 +147,12 @@ impl Engine {
     ///
     /// # WARNING - Low Level API
     ///
-    /// This function is very low level.  It takes a list of [`TypeId`][std::any::TypeId]'s indicating the actual types of the parameters.
+    /// This function is very low level.  It takes a list of [`TypeId`][std::any::TypeId]'s
+    /// indicating the actual types of the parameters.
     ///
     /// ## Arguments
     ///
-    /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`][crate::Dynamic],
+    /// Arguments are simply passed in as a mutable array of [`&mut Dynamic`][crate::Dynamic].
     /// The arguments are guaranteed to be of the correct types matching the [`TypeId`][std::any::TypeId]'s.
     ///
     /// To access a primary argument value (i.e. cloning is cheap), use: `args[n].as_xxx().unwrap()`
@@ -269,9 +265,23 @@ impl Engine {
     /// ```
     #[inline(always)]
     pub fn register_type_with_name<T: Variant + Clone>(&mut self, name: &str) -> &mut Self {
+        self.register_type_with_name_raw(type_name::<T>(), name)
+    }
+    /// Register a custom type for use with the [`Engine`], with a pretty-print name
+    /// for the `type_of` function. The type must implement [`Clone`].
+    ///
+    /// # WARNING - Low Level API
+    ///
+    /// This function is low level.
+    #[inline(always)]
+    pub fn register_type_with_name_raw(
+        &mut self,
+        fully_qualified_type_path: impl Into<SmartString>,
+        name: impl Into<SmartString>,
+    ) -> &mut Self {
         // Add the pretty-print type name into the map
         self.type_names
-            .insert(type_name::<T>().into(), Box::new(name.into()));
+            .insert(fully_qualified_type_path.into(), name.into());
         self
     }
     /// Register an type iterator for an iterable type with the [`Engine`].
@@ -529,7 +539,7 @@ impl Engine {
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`], [`Map`], [`String`],
+    /// Panics if the type is [`Array`][crate::Array], [`Map`][crate::Map], [`String`],
     /// [`ImmutableString`][crate::ImmutableString], `&str` or [`INT`][crate::INT].
     /// Indexers for arrays, object maps, strings and integers cannot be registered.
     ///
@@ -573,11 +583,11 @@ impl Engine {
         get_fn: impl Fn(&mut T, X) -> V + SendSync + 'static,
     ) -> &mut Self {
         #[cfg(not(feature = "no_index"))]
-        if TypeId::of::<T>() == TypeId::of::<Array>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Array>() {
             panic!("Cannot register indexer for arrays.");
         }
         #[cfg(not(feature = "no_object"))]
-        if TypeId::of::<T>() == TypeId::of::<Map>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Map>() {
             panic!("Cannot register indexer for object maps.");
         }
         if TypeId::of::<T>() == TypeId::of::<String>()
@@ -600,7 +610,7 @@ impl Engine {
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`], [`Map`], [`String`],
+    /// Panics if the type is [`Array`][crate::Array], [`Map`][crate::Map], [`String`],
     /// [`ImmutableString`][crate::ImmutableString], `&str` or [`INT`][crate::INT].
     /// Indexers for arrays, object maps, strings and integers cannot be registered.
     ///
@@ -650,11 +660,11 @@ impl Engine {
         get_fn: impl Fn(&mut T, X) -> Result<V, Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
         #[cfg(not(feature = "no_index"))]
-        if TypeId::of::<T>() == TypeId::of::<Array>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Array>() {
             panic!("Cannot register indexer for arrays.");
         }
         #[cfg(not(feature = "no_object"))]
-        if TypeId::of::<T>() == TypeId::of::<Map>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Map>() {
             panic!("Cannot register indexer for object maps.");
         }
         if TypeId::of::<T>() == TypeId::of::<String>()
@@ -675,7 +685,7 @@ impl Engine {
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`], [`Map`], [`String`],
+    /// Panics if the type is [`Array`][crate::Array], [`Map`][crate::Map], [`String`],
     /// [`ImmutableString`][crate::ImmutableString], `&str` or [`INT`][crate::INT].
     /// Indexers for arrays, object maps, strings and integers cannot be registered.
     ///
@@ -721,11 +731,11 @@ impl Engine {
         set_fn: impl Fn(&mut T, X, V) + SendSync + 'static,
     ) -> &mut Self {
         #[cfg(not(feature = "no_index"))]
-        if TypeId::of::<T>() == TypeId::of::<Array>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Array>() {
             panic!("Cannot register indexer for arrays.");
         }
         #[cfg(not(feature = "no_object"))]
-        if TypeId::of::<T>() == TypeId::of::<Map>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Map>() {
             panic!("Cannot register indexer for object maps.");
         }
         if TypeId::of::<T>() == TypeId::of::<String>()
@@ -746,7 +756,7 @@ impl Engine {
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`], [`Map`], [`String`],
+    /// Panics if the type is [`Array`][crate::Array], [`Map`][crate::Map], [`String`],
     /// [`ImmutableString`][crate::ImmutableString], `&str` or [`INT`][crate::INT].
     /// Indexers for arrays, object maps, strings and integers cannot be registered.
     ///
@@ -799,11 +809,11 @@ impl Engine {
         set_fn: impl Fn(&mut T, X, V) -> Result<(), Box<EvalAltResult>> + SendSync + 'static,
     ) -> &mut Self {
         #[cfg(not(feature = "no_index"))]
-        if TypeId::of::<T>() == TypeId::of::<Array>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Array>() {
             panic!("Cannot register indexer for arrays.");
         }
         #[cfg(not(feature = "no_object"))]
-        if TypeId::of::<T>() == TypeId::of::<Map>() {
+        if TypeId::of::<T>() == TypeId::of::<crate::Map>() {
             panic!("Cannot register indexer for object maps.");
         }
         if TypeId::of::<T>() == TypeId::of::<String>()
@@ -824,7 +834,7 @@ impl Engine {
     ///
     /// # Panics
     ///
-    /// Panics if the type is [`Array`], [`Map`], [`String`],
+    /// Panics if the type is [`Array`][crate::Array], [`Map`][crate::Map], [`String`],
     /// [`ImmutableString`][crate::ImmutableString], `&str` or [`INT`][crate::INT].
     /// Indexers for arrays, object maps, strings and integers cannot be registered.
     ///

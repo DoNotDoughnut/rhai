@@ -23,9 +23,6 @@ use std::{
     mem,
 };
 
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
 /// Arguments to a function call, which is a list of [`&mut Dynamic`][Dynamic].
 pub type FnCallArgs<'a> = [&'a mut Dynamic];
 
@@ -177,6 +174,10 @@ impl Engine {
         allow_dynamic: bool,
         is_op_assignment: bool,
     ) -> Option<&'s FnResolutionCacheEntry> {
+        if hash_script == 0 {
+            return None;
+        }
+
         let fn_name = fn_name.as_ref();
 
         let mut hash = args.as_ref().map_or(hash_script, |args| {
@@ -562,13 +563,10 @@ impl Engine {
 
         // Scripted function call?
         #[cfg(not(feature = "no_function"))]
-        let hash_script = hashes.script;
-
-        #[cfg(not(feature = "no_function"))]
-        if let Some(FnResolutionCacheEntry { func, source }) = hash_script.and_then(|hash| {
-            self.resolve_fn(mods, state, lib, fn_name, hash, None, false, false)
-                .cloned()
-        }) {
+        if let Some(FnResolutionCacheEntry { func, source }) = self
+            .resolve_fn(mods, state, lib, fn_name, hashes.script, None, false, false)
+            .cloned()
+        {
             // Script function call
             assert!(func.is_script());
 
@@ -579,11 +577,12 @@ impl Engine {
             }
 
             let mut empty_scope;
-            let scope = if let Some(scope) = _scope {
-                scope
-            } else {
-                empty_scope = Scope::new();
-                &mut empty_scope
+            let scope = match _scope {
+                Some(scope) => scope,
+                None => {
+                    empty_scope = Scope::new();
+                    &mut empty_scope
+                }
             };
 
             let result = if _is_method_call {
@@ -840,7 +839,7 @@ impl Engine {
 
                 // Check if it is a map method call in OOP style
                 #[cfg(not(feature = "no_object"))]
-                if let Some(map) = target.read_lock::<Map>() {
+                if let Some(map) = target.read_lock::<crate::Map>() {
                     if let Some(val) = map.get(fn_name) {
                         if let Some(fn_ptr) = val.read_lock::<FnPtr>() {
                             // Remap the function name

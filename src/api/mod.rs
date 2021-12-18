@@ -157,7 +157,7 @@ impl Engine {
     }
     /// Register a custom operator with a precedence into the language.
     ///
-    /// The operator must be a valid identifier (i.e. it cannot be a symbol).
+    /// The operator can be a valid identifier, a reserved symbol, a disabled operator or a disabled keyword.
     ///
     /// The precedence cannot be zero.
     ///
@@ -169,15 +169,15 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     ///
-    /// // Register a custom operator called 'foo' and give it
+    /// // Register a custom operator called '#' and give it
     /// // a precedence of 160 (i.e. between +|- and *|/).
-    /// engine.register_custom_operator("foo", 160).expect("should succeed");
+    /// engine.register_custom_operator("#", 160).expect("should succeed");
     ///
-    /// // Register a binary function named 'foo'
-    /// engine.register_fn("foo", |x: i64, y: i64| (x * y) - (x + y));
+    /// // Register a binary function named '#'
+    /// engine.register_fn("#", |x: i64, y: i64| (x * y) - (x + y));
     ///
     /// assert_eq!(
-    ///     engine.eval_expression::<i64>("1 + 2 * 3 foo 4 - 5 / 6")?,
+    ///     engine.eval_expression::<i64>("1 + 2 * 3 # 4 - 5 / 6")?,
     ///     15
     /// );
     /// # Ok(())

@@ -31,7 +31,7 @@ pub trait ModuleResolver: SendSync {
     /// Returns [`None`] (default) if such resolution is not supported
     /// (e.g. if the module is Rust-based).
     ///
-    /// ## Low-Level API
+    /// # WARNING - Low Level API
     ///
     /// Override the default implementation of this method if the module resolver
     /// serves modules based on compiled Rhai scripts.

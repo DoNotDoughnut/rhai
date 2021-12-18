@@ -19,15 +19,6 @@ use std::{
     str::{Chars, FromStr},
 };
 
-#[cfg(not(feature = "no_float"))]
-use crate::{ast::FloatWrapper, FLOAT};
-
-#[cfg(feature = "decimal")]
-use rust_decimal::Decimal;
-
-#[cfg(not(feature = "no_function"))]
-use crate::engine::KEYWORD_IS_DEF_FN;
-
 /// _(internals)_ A type containing commands to control the tokenizer.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Copy)]
 pub struct TokenizerControlBlock {
@@ -305,12 +296,12 @@ pub enum Token {
     ///
     /// Reserved under the `no_float` feature.
     #[cfg(not(feature = "no_float"))]
-    FloatConstant(FloatWrapper<FLOAT>),
-    /// A [`Decimal`] constant.
+    FloatConstant(crate::ast::FloatWrapper<crate::FLOAT>),
+    /// A [`Decimal`][rust_decimal::Decimal] constant.
     ///
     /// Requires the `decimal` feature.
     #[cfg(feature = "decimal")]
-    DecimalConstant(Decimal),
+    DecimalConstant(rust_decimal::Decimal),
     /// An identifier.
     Identifier(Box<str>),
     /// A character constant.
@@ -365,6 +356,10 @@ pub enum Token {
     Comma,
     /// `.`
     Period,
+    /// `..`
+    ExclusiveRange,
+    /// `..=`
+    InclusiveRange,
     /// `#{`
     MapStart,
     /// `=`
@@ -516,6 +511,8 @@ impl Token {
             Underscore => "_",
             Comma => ",",
             Period => ".",
+            ExclusiveRange => "..",
+            InclusiveRange => "..=",
             MapStart => "#{",
             Equals => "=",
             True => "true",
@@ -710,6 +707,8 @@ impl Token {
             "_" => Underscore,
             "," => Comma,
             "." => Period,
+            ".." => ExclusiveRange,
+            "..=" => InclusiveRange,
             "#{" => MapStart,
             "=" => Equals,
             "true" => True,
@@ -789,7 +788,7 @@ impl Token {
             }
 
             #[cfg(not(feature = "no_function"))]
-            KEYWORD_IS_DEF_FN => Reserved(syntax.into()),
+            crate::engine::KEYWORD_IS_DEF_FN => Reserved(syntax.into()),
 
             _ => return None,
         })
@@ -814,6 +813,8 @@ impl Token {
             Colon            | // #{ foo: - is unary
             Comma            | // ( ... , -expr ) - is unary
             //Period           |
+            ExclusiveRange            | // .. - is unary
+            InclusiveRange   | // ..= - is unary
             LeftBrace        | // { -expr } - is unary
             // RightBrace    | { expr } - expr not unary & is closing
             LeftParen        | // ( -expr ) - is unary
@@ -877,6 +878,8 @@ impl Token {
             | LeftShiftAssign | RightShiftAssign | AndAssign | OrAssign | XOrAssign
             | ModuloAssign => 0,
 
+            ExclusiveRange | InclusiveRange => 10,
+
             Or | XOr | Pipe => 30,
 
             And | Ampersand => 60,
@@ -930,11 +933,12 @@ impl Token {
         match self {
             LeftBrace | RightBrace | LeftParen | RightParen | LeftBracket | RightBracket | Plus
             | UnaryPlus | Minus | UnaryMinus | Multiply | Divide | Modulo | PowerOf | LeftShift
-            | RightShift | SemiColon | Colon | DoubleColon | Comma | Period | MapStart | Equals
-            | LessThan | GreaterThan | LessThanEqualsTo | GreaterThanEqualsTo | EqualsTo
-            | NotEqualsTo | Bang | Pipe | Or | XOr | Ampersand | And | PlusAssign | MinusAssign
-            | MultiplyAssign | DivideAssign | LeftShiftAssign | RightShiftAssign | AndAssign
-            | OrAssign | XOrAssign | ModuloAssign | PowerOfAssign => true,
+            | RightShift | SemiColon | Colon | DoubleColon | Comma | Period | ExclusiveRange
+            | InclusiveRange | MapStart | Equals | LessThan | GreaterThan | LessThanEqualsTo
+            | GreaterThanEqualsTo | EqualsTo | NotEqualsTo | Bang | Pipe | Or | XOr | Ampersand
+            | And | PlusAssign | MinusAssign | MultiplyAssign | DivideAssign | LeftShiftAssign
+            | RightShiftAssign | AndAssign | OrAssign | XOrAssign | ModuloAssign
+            | PowerOfAssign => true,
 
             _ => false,
         }
@@ -1182,6 +1186,15 @@ pub fn parse_string_literal(
             _ if termination_char == next_char && !escape.is_empty() => {
                 escape.clear();
                 result.push(next_char)
+            }
+
+            // Double wrapper
+            _ if termination_char == next_char
+                && escape.is_empty()
+                && stream.peek_next().map_or(false, |c| c == termination_char) =>
+            {
+                eat_next(stream, pos);
+                result.push(termination_char)
             }
 
             // Close wrapper
@@ -1534,18 +1547,20 @@ fn get_next_token_inner(
 
                         // If integer parsing is unnecessary, try float instead
                         #[cfg(not(feature = "no_float"))]
-                        let num =
-                            num.or_else(|_| FloatWrapper::from_str(&out).map(Token::FloatConstant));
+                        let num = num.or_else(|_| {
+                            crate::ast::FloatWrapper::from_str(&out).map(Token::FloatConstant)
+                        });
 
                         // Then try decimal
                         #[cfg(feature = "decimal")]
-                        let num =
-                            num.or_else(|_| Decimal::from_str(&out).map(Token::DecimalConstant));
+                        let num = num.or_else(|_| {
+                            rust_decimal::Decimal::from_str(&out).map(Token::DecimalConstant)
+                        });
 
                         // Then try decimal in scientific notation
                         #[cfg(feature = "decimal")]
                         let num = num.or_else(|_| {
-                            Decimal::from_scientific(&out).map(Token::DecimalConstant)
+                            rust_decimal::Decimal::from_scientific(&out).map(Token::DecimalConstant)
                         });
 
                         num.unwrap_or_else(|_| {
@@ -1792,13 +1807,20 @@ fn get_next_token_inner(
 
             ('.', '.') => {
                 eat_next(stream, pos);
-
-                if stream.peek_next() == Some('.') {
-                    eat_next(stream, pos);
-                    return Some((Token::Reserved("...".into()), start_pos));
-                } else {
-                    return Some((Token::Reserved("..".into()), start_pos));
-                }
+                return Some((
+                    match stream.peek_next() {
+                        Some('.') => {
+                            eat_next(stream, pos);
+                            Token::Reserved("...".into())
+                        }
+                        Some('=') => {
+                            eat_next(stream, pos);
+                            Token::InclusiveRange
+                        }
+                        _ => Token::ExclusiveRange,
+                    },
+                    start_pos,
+                ));
             }
             ('.', _) => return Some((Token::Period, start_pos)),
 
@@ -1990,7 +2012,7 @@ pub fn is_keyword_function(name: impl AsRef<str>) -> bool {
         | KEYWORD_FN_PTR_CALL | KEYWORD_FN_PTR_CURRY | KEYWORD_IS_DEF_VAR => true,
 
         #[cfg(not(feature = "no_function"))]
-        KEYWORD_IS_DEF_FN => true,
+        crate::engine::KEYWORD_IS_DEF_FN => true,
 
         _ => false,
     }
@@ -2221,10 +2243,9 @@ impl<'a> Iterator for TokenIterator<'a> {
         };
 
         // Run the mapper, if any
-        let token = if let Some(map_func) = self.token_mapper {
-            map_func(token, pos, &self.state)
-        } else {
-            token
+        let token = match self.token_mapper {
+            Some(map_func) => map_func(token, pos, &self.state),
+            None => token,
         };
 
         Some((token, pos))

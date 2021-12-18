@@ -6,18 +6,6 @@ use std::fmt;
 #[cfg(feature = "no_std")]
 use std::prelude::v1::*;
 
-#[cfg(not(feature = "no_index"))]
-use crate::Array;
-
-#[cfg(not(feature = "no_index"))]
-use serde::de::SeqAccess;
-
-#[cfg(not(feature = "no_object"))]
-use crate::Map;
-
-#[cfg(not(feature = "no_object"))]
-use serde::de::MapAccess;
-
 struct DynamicVisitor;
 
 impl<'d> Visitor<'d> for DynamicVisitor {
@@ -141,8 +129,8 @@ impl<'d> Visitor<'d> for DynamicVisitor {
     }
 
     #[cfg(not(feature = "no_index"))]
-    fn visit_seq<A: SeqAccess<'d>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-        let mut arr = Array::new();
+    fn visit_seq<A: serde::de::SeqAccess<'d>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        let mut arr = crate::Array::new();
 
         while let Some(v) = seq.next_element()? {
             arr.push(v);
@@ -152,8 +140,8 @@ impl<'d> Visitor<'d> for DynamicVisitor {
     }
 
     #[cfg(not(feature = "no_object"))]
-    fn visit_map<M: MapAccess<'d>>(self, mut map: M) -> Result<Self::Value, M::Error> {
-        let mut m = Map::new();
+    fn visit_map<M: serde::de::MapAccess<'d>>(self, mut map: M) -> Result<Self::Value, M::Error> {
+        let mut m = crate::Map::new();
 
         while let Some((k, v)) = map.next_entry::<&str, _>()? {
             m.insert(k.into(), v);
