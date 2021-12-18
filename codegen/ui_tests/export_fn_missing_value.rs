@@ -1,4 +1,4 @@
-use quad_compat_rhai::plugin::*;
+use rhai::plugin::*;
 
 #[derive(Clone)]
 struct Point {

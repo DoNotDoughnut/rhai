@@ -1,12 +1,12 @@
-use quad_compat_rhai::{Array, Engine, EvalAltResult, FLOAT};
+use rhai::{Array, Engine, EvalAltResult, FLOAT};
 
 pub mod one_fn_module_nested_attr {
-    use quad_compat_rhai::plugin::*;
+    use rhai::plugin::*;
 
     #[export_module]
     pub mod advanced_math {
-        use quad_compat_rhai::plugin::*;
-        use quad_compat_rhai::FLOAT;
+        use rhai::plugin::*;
+        use rhai::FLOAT;
 
         #[rhai_fn(return_raw)]
         pub fn get_mystic_number() -> Result<FLOAT, Box<EvalAltResult>> {
@@ -29,14 +29,14 @@ fn one_fn_module_nested_attr_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 pub mod one_fn_sub_module_nested_attr {
-    use quad_compat_rhai::plugin::*;
+    use rhai::plugin::*;
 
     #[export_module]
     pub mod advanced_math {
         #[rhai_mod(name = "constants")]
         pub mod my_module {
-            use quad_compat_rhai::plugin::*;
-            use quad_compat_rhai::FLOAT;
+            use rhai::plugin::*;
+            use rhai::FLOAT;
             #[rhai_fn(return_raw)]
             pub fn get_mystic_number() -> Result<FLOAT, Box<EvalAltResult>> {
                 Ok(42.0)
@@ -59,12 +59,12 @@ fn one_fn_sub_module_nested_attr_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 mod export_nested_by_prefix {
-    use quad_compat_rhai::plugin::*;
+    use rhai::plugin::*;
 
     #[export_module(export_prefix = "foo_")]
     pub mod my_adds {
         pub mod foo_first_adders {
-            use quad_compat_rhai::{FLOAT, INT};
+            use rhai::{FLOAT, INT};
 
             pub fn add_float(f1: FLOAT, f2: FLOAT) -> FLOAT {
                 f1 + f2
@@ -76,7 +76,7 @@ mod export_nested_by_prefix {
         }
 
         pub mod foo_second_adders {
-            use quad_compat_rhai::{FLOAT, INT};
+            use rhai::{FLOAT, INT};
 
             pub fn add_float(f1: FLOAT, f2: FLOAT) -> FLOAT {
                 f1 + f2
@@ -89,7 +89,7 @@ mod export_nested_by_prefix {
 
         #[rhai_mod(name = "foo_third_adders")]
         pub mod baz_third_adders {
-            use quad_compat_rhai::{FLOAT, INT};
+            use rhai::{FLOAT, INT};
 
             pub fn add_float(f1: FLOAT, f2: FLOAT) -> FLOAT {
                 f1 + f2
@@ -101,7 +101,7 @@ mod export_nested_by_prefix {
         }
 
         pub mod bar_fourth_adders {
-            use quad_compat_rhai::{FLOAT, INT};
+            use rhai::{FLOAT, INT};
 
             pub fn add_float(f1: FLOAT, f2: FLOAT) -> FLOAT {
                 f1 + f2
