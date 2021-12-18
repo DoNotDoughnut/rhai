@@ -110,7 +110,7 @@ impl FnPtr {
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # #[cfg(not(feature = "no_function"))]
     /// # {
-    /// use rhai::{Engine, FnPtr};
+    /// use quad_compat_rhai::{Engine, FnPtr};
     ///
     /// let engine = Engine::new();
     ///

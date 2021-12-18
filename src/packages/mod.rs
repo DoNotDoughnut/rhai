@@ -53,8 +53,8 @@ pub trait Package {
 /// Define a package named `MyPackage` with a single function named `my_add`:
 ///
 /// ```
-/// use rhai::{Dynamic, EvalAltResult};
-/// use rhai::def_package;
+/// use quad_compat_rhai::{Dynamic, EvalAltResult};
+/// use quad_compat_rhai::def_package;
 ///
 /// fn add(x: i64, y: i64) -> Result<i64, Box<EvalAltResult>> { Ok(x + y) }
 ///

@@ -1129,7 +1129,7 @@ impl Dynamic {
     /// # Examples
     ///
     /// ```
-    /// use rhai::Dynamic;
+    /// use quad_compat_rhai::Dynamic;
     ///
     /// let result = Dynamic::from(42_i64);
     /// assert_eq!(result.type_name(), "i64");
@@ -1277,7 +1277,7 @@ impl Dynamic {
     /// # Example
     ///
     /// ```
-    /// use rhai::Dynamic;
+    /// use quad_compat_rhai::Dynamic;
     ///
     /// let x = Dynamic::from(42_u32);
     ///
@@ -1413,7 +1413,7 @@ impl Dynamic {
     /// # Example
     ///
     /// ```
-    /// use rhai::Dynamic;
+    /// use quad_compat_rhai::Dynamic;
     ///
     /// let x = Dynamic::from(42_u32);
     ///
@@ -1460,7 +1460,7 @@ impl Dynamic {
     /// # Example
     ///
     /// ```
-    /// use rhai::Dynamic;
+    /// use quad_compat_rhai::Dynamic;
     ///
     /// let x = Dynamic::from(42_u32);
     /// let y = &x;

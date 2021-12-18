@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_optimize"))]
 
-use rhai::{Engine, EvalAltResult, OptimizationLevel, Scope, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, OptimizationLevel, Scope, INT};
 
 #[test]
 fn test_optimizer() -> Result<(), Box<EvalAltResult>> {

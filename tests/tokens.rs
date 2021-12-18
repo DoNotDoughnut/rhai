@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, LexError, ParseErrorType, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, LexError, ParseErrorType, INT};
 
 #[test]
 fn test_tokens_disabled() {

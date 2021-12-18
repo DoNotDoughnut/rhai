@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, ParseErrorType, Scope, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, ParseErrorType, Scope, INT};
 
 #[test]
 fn test_switch() -> Result<(), Box<EvalAltResult>> {
@@ -185,7 +185,7 @@ fn test_switch_condition() -> Result<(), Box<EvalAltResult>> {
 #[cfg(not(feature = "no_object"))]
 mod test_switch_enum {
     use super::*;
-    use rhai::Array;
+    use quad_compat_rhai::Array;
     #[derive(Debug, Clone)]
     #[allow(dead_code)]
     enum MyEnum {

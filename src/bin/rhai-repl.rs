@@ -1,4 +1,4 @@
-use rhai::{Dynamic, Engine, EvalAltResult, Module, Scope, AST};
+use quad_compat_rhai::{Dynamic, Engine, EvalAltResult, Module, Scope, AST};
 
 use std::{
     env,
@@ -144,14 +144,14 @@ fn main() {
 
     // Setup Engine
     #[cfg(not(feature = "no_optimize"))]
-    engine.set_optimization_level(rhai::OptimizationLevel::None);
+    engine.set_optimization_level(quad_compat_rhai::OptimizationLevel::None);
 
     // Set a file module resolver without caching
     #[cfg(not(feature = "no_module"))]
     #[cfg(not(feature = "no_std"))]
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     {
-        let mut resolver = rhai::module_resolvers::FileModuleResolver::new();
+        let mut resolver = quad_compat_rhai::module_resolvers::FileModuleResolver::new();
         resolver.enable_cache(false);
         engine.set_module_resolver(resolver);
     }
@@ -276,7 +276,7 @@ fn main() {
 
                 #[cfg(not(feature = "no_optimize"))]
                 {
-                    ast = engine.optimize_ast(&scope, r, rhai::OptimizationLevel::Simple);
+                    ast = engine.optimize_ast(&scope, r, quad_compat_rhai::OptimizationLevel::Simple);
                 }
 
                 #[cfg(feature = "no_optimize")]

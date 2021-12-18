@@ -141,7 +141,7 @@ impl Engine {
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # #[cfg(not(feature = "no_function"))]
     /// # {
-    /// use rhai::{Engine, Scope, Dynamic};
+    /// use quad_compat_rhai::{Engine, Scope, Dynamic};
     ///
     /// let engine = Engine::new();
     ///

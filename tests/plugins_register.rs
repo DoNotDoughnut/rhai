@@ -1,5 +1,5 @@
-use rhai::plugin::*;
-use rhai::{Engine, EvalAltResult, INT};
+use quad_compat_rhai::plugin::*;
+use quad_compat_rhai::{Engine, EvalAltResult, INT};
 
 #[export_fn]
 pub fn add_together(x: INT, y: INT) -> INT {

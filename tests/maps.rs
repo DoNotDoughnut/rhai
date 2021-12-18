@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_object"))]
 
-use rhai::{Engine, EvalAltResult, Map, ParseErrorType, Scope, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, Map, ParseErrorType, Scope, INT};
 
 #[test]
 fn test_map_indexing() -> Result<(), Box<EvalAltResult>> {

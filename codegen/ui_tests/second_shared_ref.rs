@@ -1,4 +1,4 @@
-use rhai::plugin::*;
+use quad_compat_rhai::plugin::*;
 
 #[derive(Clone)]
 pub struct Clonable {

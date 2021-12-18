@@ -23,7 +23,7 @@ const SCOPE_ENTRIES_INLINED: usize = 8;
 ///
 /// ```
 /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-/// use rhai::{Engine, Scope};
+/// use quad_compat_rhai::{Engine, Scope};
 ///
 /// let engine = Engine::new();
 /// let mut my_scope = Scope::new();
@@ -82,7 +82,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::Scope;
+    /// use quad_compat_rhai::Scope;
     ///
     /// let mut my_scope = Scope::new();
     ///
@@ -102,7 +102,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::Scope;
+    /// use quad_compat_rhai::Scope;
     ///
     /// let mut my_scope = Scope::new();
     ///
@@ -127,7 +127,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::Scope;
+    /// use quad_compat_rhai::Scope;
     ///
     /// let mut my_scope = Scope::new();
     /// assert_eq!(my_scope.len(), 0);
@@ -145,7 +145,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::Scope;
+    /// use quad_compat_rhai::Scope;
     ///
     /// let mut my_scope = Scope::new();
     /// assert!(my_scope.is_empty());
@@ -163,7 +163,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::Scope;
+    /// use quad_compat_rhai::Scope;
     ///
     /// let mut my_scope = Scope::new();
     ///
@@ -183,7 +183,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Dynamic,  Scope};
+    /// use quad_compat_rhai::{Dynamic,  Scope};
     ///
     /// let mut my_scope = Scope::new();
     ///
@@ -202,7 +202,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::Scope;
+    /// use quad_compat_rhai::Scope;
     ///
     /// let mut my_scope = Scope::new();
     ///
@@ -225,7 +225,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Dynamic, Scope};
+    /// use quad_compat_rhai::{Dynamic, Scope};
     ///
     /// let mut my_scope = Scope::new();
     ///
@@ -258,7 +258,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::Scope;
+    /// use quad_compat_rhai::Scope;
     ///
     /// let mut my_scope = Scope::new();
     ///
@@ -290,7 +290,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::Scope;
+    /// use quad_compat_rhai::Scope;
     ///
     /// let mut my_scope = Scope::new();
     ///
@@ -327,7 +327,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::Scope;
+    /// use quad_compat_rhai::Scope;
     ///
     /// let mut my_scope = Scope::new();
     ///
@@ -355,7 +355,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::Scope;
+    /// use quad_compat_rhai::Scope;
     ///
     /// let mut my_scope = Scope::new();
     ///
@@ -379,7 +379,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::Scope;
+    /// use quad_compat_rhai::Scope;
     ///
     /// let mut my_scope = Scope::new();
     ///
@@ -424,7 +424,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::Scope;
+    /// use quad_compat_rhai::Scope;
     ///
     /// let mut my_scope = Scope::new();
     ///
@@ -460,7 +460,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::Scope;
+    /// use quad_compat_rhai::Scope;
     ///
     /// let mut my_scope = Scope::new();
     ///
@@ -551,7 +551,7 @@ impl<'a> Scope<'a> {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Dynamic, Scope};
+    /// use quad_compat_rhai::{Dynamic, Scope};
     ///
     /// let mut my_scope = Scope::new();
     ///

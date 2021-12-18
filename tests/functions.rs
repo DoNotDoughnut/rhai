@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, FnNamespace, Module, NativeCallContext, Shared, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, FnNamespace, Module, NativeCallContext, Shared, INT};
 
 #[cfg(not(feature = "no_object"))]
 #[test]

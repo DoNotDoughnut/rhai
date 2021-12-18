@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, ImmutableString, Scope, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, ImmutableString, Scope, INT};
 
 #[test]
 fn test_string() -> Result<(), Box<EvalAltResult>> {

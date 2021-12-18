@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, INT};
 
 #[test]
 fn test_unary_minus() -> Result<(), Box<EvalAltResult>> {

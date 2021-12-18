@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_module"))]
-use rhai::{
+use quad_compat_rhai::{
     module_resolvers::{DummyModuleResolver, StaticModuleResolver},
     Dynamic, Engine, EvalAltResult, FnNamespace, ImmutableString, Module, ParseError,
     ParseErrorType, Scope, INT,
@@ -473,7 +473,7 @@ fn test_module_ast_namespace() -> Result<(), Box<EvalAltResult>> {
 #[cfg(not(feature = "no_function"))]
 #[test]
 fn test_module_ast_namespace2() -> Result<(), Box<EvalAltResult>> {
-    use rhai::{Engine, Module, Scope};
+    use quad_compat_rhai::{Engine, Module, Scope};
 
     const MODULE_TEXT: &str = r#"
         fn run_function(function) {

@@ -2,7 +2,7 @@
 members = [".", "codegen"]
 
 [package]
-name = "rhai"
+name = "quad-compat-rhai"
 version = "1.4.0"
 edition = "2018"
 authors = ["Jonathan Turner", "Lukáš Hozda", "Stephen Chung", "jhwgh1968"]

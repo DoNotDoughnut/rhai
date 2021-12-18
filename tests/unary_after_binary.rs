@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, INT};
 
 #[test]
 // TODO also add test case for unary after compound

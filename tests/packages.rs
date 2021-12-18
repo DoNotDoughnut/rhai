@@ -1,5 +1,5 @@
-use rhai::packages::{Package, StandardPackage};
-use rhai::{Engine, EvalAltResult, Module, Scope, INT};
+use quad_compat_rhai::packages::{Package, StandardPackage};
+use quad_compat_rhai::{Engine, EvalAltResult, Module, Scope, INT};
 
 #[test]
 fn test_packages() -> Result<(), Box<EvalAltResult>> {

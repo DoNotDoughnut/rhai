@@ -1,17 +1,17 @@
 #![cfg(feature = "serde")]
 
-use rhai::{
+use quad_compat_rhai::{
     serde::{from_dynamic, to_dynamic},
     Dynamic, Engine, EvalAltResult, ImmutableString, INT,
 };
 use serde::{Deserialize, Serialize};
 
 #[cfg(not(feature = "no_index"))]
-use rhai::Array;
+use quad_compat_rhai::Array;
 #[cfg(not(feature = "no_object"))]
-use rhai::Map;
+use quad_compat_rhai::Map;
 #[cfg(not(feature = "no_float"))]
-use rhai::FLOAT;
+use quad_compat_rhai::FLOAT;
 #[cfg(feature = "decimal")]
 use rust_decimal::Decimal;
 

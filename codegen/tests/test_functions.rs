@@ -1,9 +1,9 @@
-use rhai::plugin::*;
-use rhai::{Engine, EvalAltResult, Module, FLOAT};
+use quad_compat_rhai::plugin::*;
+use quad_compat_rhai::{Engine, EvalAltResult, Module, FLOAT};
 
 pub mod raw_fn {
-    use rhai::plugin::*;
-    use rhai::FLOAT;
+    use quad_compat_rhai::plugin::*;
+    use quad_compat_rhai::FLOAT;
 
     #[export_fn]
     pub fn distance_function(x1: FLOAT, y1: FLOAT, x2: FLOAT, y2: FLOAT) -> FLOAT {
@@ -29,8 +29,8 @@ fn raw_fn_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 mod raw_fn_mut {
-    use rhai::plugin::*;
-    use rhai::FLOAT;
+    use quad_compat_rhai::plugin::*;
+    use quad_compat_rhai::FLOAT;
 
     #[export_fn]
     pub fn add_in_place(f1: &mut FLOAT, f2: FLOAT) {
@@ -58,7 +58,7 @@ fn raw_fn_mut_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 mod raw_fn_str {
-    use rhai::plugin::*;
+    use quad_compat_rhai::plugin::*;
 
     #[export_fn]
     pub fn write_out_str(message: &str) -> bool {
@@ -83,8 +83,8 @@ fn raw_fn_str_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 mod mut_opaque_ref {
-    use rhai::plugin::*;
-    use rhai::INT;
+    use quad_compat_rhai::plugin::*;
+    use quad_compat_rhai::INT;
 
     #[derive(Clone)]
     pub struct StatusMessage {
@@ -142,8 +142,8 @@ fn mut_opaque_ref_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 pub mod raw_returning_fn {
-    use rhai::plugin::*;
-    use rhai::FLOAT;
+    use quad_compat_rhai::plugin::*;
+    use quad_compat_rhai::FLOAT;
 
     #[export_fn(return_raw)]
     pub fn distance_function(

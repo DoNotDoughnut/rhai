@@ -216,7 +216,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").expect("answer should exist"), 42);
@@ -246,7 +246,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// module.set_id("hello");
     /// assert_eq!(module.id(), Some("hello"));
@@ -269,7 +269,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// module.set_id("hello");
     /// assert_eq!(module.id(), Some("hello"));
@@ -284,7 +284,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// module.set_id("hello");
     /// assert_eq!(module.id(), Some("hello"));
@@ -302,7 +302,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let module = Module::new();
     /// assert!(module.is_empty());
     /// ```
@@ -327,7 +327,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// assert!(module.is_indexed());
     ///
@@ -364,7 +364,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert!(module.contains_var("answer"));
@@ -380,7 +380,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").expect("answer should exist"), 42);
@@ -396,7 +396,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var("answer").expect("answer should exist").cast::<i64>(), 42);
@@ -414,7 +414,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// module.set_var("answer", 42_i64);
     /// assert_eq!(module.get_var_value::<i64>("answer").expect("answer should exist"), 42);
@@ -525,7 +525,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// let sub_module = Module::new();
     /// module.set_sub_module("question", sub_module);
@@ -542,7 +542,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// let sub_module = Module::new();
     /// module.set_sub_module("question", sub_module);
@@ -561,7 +561,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// let sub_module = Module::new();
     /// module.set_sub_module("question", sub_module);
@@ -586,7 +586,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// let hash = module.set_native_fn("calc", || Ok(42_i64));
     /// assert!(module.contains_fn(hash));
@@ -755,7 +755,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Module, FnNamespace, FnAccess};
+    /// use quad_compat_rhai::{Module, FnNamespace, FnAccess};
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_raw_fn("double_or_not", FnNamespace::Internal, FnAccess::Public,
@@ -829,7 +829,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// let hash = module.set_native_fn("calc", || Ok(42_i64));
     /// assert!(module.contains_fn(hash));
@@ -863,7 +863,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// # use rhai::Module;
+    /// # use quad_compat_rhai::Module;
     /// let mut module = Module::new();
     /// let hash = module.set_getter_fn("value", |x: &mut i64| { Ok(*x) });
     /// assert!(module.contains_fn(hash));
@@ -900,7 +900,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Module, ImmutableString};
+    /// use quad_compat_rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_setter_fn("value", |x: &mut i64, y: ImmutableString| {
@@ -946,7 +946,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Module, ImmutableString};
+    /// use quad_compat_rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_indexer_get_fn(|x: &mut i64, y: ImmutableString| {
@@ -1007,7 +1007,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Module, ImmutableString};
+    /// use quad_compat_rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
     /// let hash = module.set_indexer_set_fn(|x: &mut i64, y: ImmutableString, value: i64| {
@@ -1068,7 +1068,7 @@ impl Module {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Module, ImmutableString};
+    /// use quad_compat_rhai::{Module, ImmutableString};
     ///
     /// let mut module = Module::new();
     /// let (hash_get, hash_set) = module.set_indexer_get_set_fn(
@@ -1389,7 +1389,7 @@ impl Module {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, Module, Scope};
+    /// use quad_compat_rhai::{Engine, Module, Scope};
     ///
     /// let engine = Engine::new();
     /// let ast = engine.compile("let answer = 42; export answer;")?;

@@ -22,7 +22,7 @@ pub trait Func<ARGS, RET> {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, Func};               // use 'Func' for 'create_from_ast'
+    /// use quad_compat_rhai::{Engine, Func};               // use 'Func' for 'create_from_ast'
     ///
     /// let engine = Engine::new();             // create a new 'Engine' just for this
     ///
@@ -54,7 +54,7 @@ pub trait Func<ARGS, RET> {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, Func};               // use 'Func' for 'create_from_script'
+    /// use quad_compat_rhai::{Engine, Func};               // use 'Func' for 'create_from_script'
     ///
     /// let engine = Engine::new();             // create a new 'Engine' just for this
     ///

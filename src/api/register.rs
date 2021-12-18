@@ -29,7 +29,7 @@ impl Engine {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// // Normal function
     /// fn add(x: i64, y: i64) -> i64 {
@@ -90,7 +90,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, EvalAltResult};
+    /// use quad_compat_rhai::{Engine, EvalAltResult};
     ///
     /// // Normal function
     /// fn div(x: i64, y: i64) -> Result<i64, Box<EvalAltResult>> {
@@ -200,7 +200,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -239,7 +239,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -316,7 +316,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -349,7 +349,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, Dynamic, EvalAltResult};
+    /// use quad_compat_rhai::{Engine, Dynamic, EvalAltResult};
     ///
     /// #[derive(Clone)]
     /// struct TestStruct {
@@ -405,7 +405,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -440,7 +440,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, Dynamic, EvalAltResult};
+    /// use quad_compat_rhai::{Engine, Dynamic, EvalAltResult};
     ///
     /// #[derive(Debug, Clone, Eq, PartialEq)]
     /// struct TestStruct {
@@ -505,7 +505,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -558,7 +558,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -617,7 +617,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, Dynamic, EvalAltResult};
+    /// use quad_compat_rhai::{Engine, Dynamic, EvalAltResult};
     ///
     /// #[derive(Clone)]
     /// struct TestStruct {
@@ -703,7 +703,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -763,7 +763,7 @@ impl Engine {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, Dynamic, EvalAltResult};
+    /// use quad_compat_rhai::{Engine, Dynamic, EvalAltResult};
     ///
     /// #[derive(Clone)]
     /// struct TestStruct {
@@ -854,7 +854,7 @@ impl Engine {
     /// }
     ///
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -909,7 +909,7 @@ impl Engine {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, Shared, Module};
+    /// use quad_compat_rhai::{Engine, Shared, Module};
     ///
     /// let mut engine = Engine::new();
     ///

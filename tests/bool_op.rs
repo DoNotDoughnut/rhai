@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult};
+use quad_compat_rhai::{Engine, EvalAltResult};
 
 #[test]
 fn test_bool_op1() -> Result<(), Box<EvalAltResult>> {

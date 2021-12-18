@@ -1,4 +1,4 @@
-use rhai::{Engine, INT};
+use quad_compat_rhai::{Engine, INT};
 
 #[cfg(feature = "sync")]
 use std::sync::Mutex;

@@ -1,7 +1,7 @@
-use rhai::{Array, Engine, EvalAltResult, FLOAT, INT};
+use quad_compat_rhai::{Array, Engine, EvalAltResult, FLOAT, INT};
 
 pub mod empty_module {
-    use rhai::plugin::*;
+    use quad_compat_rhai::plugin::*;
 
     #[export_module]
     pub mod EmptyModule {}
@@ -17,11 +17,11 @@ fn empty_module_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 pub mod one_fn_module {
-    use rhai::plugin::*;
+    use quad_compat_rhai::plugin::*;
 
     #[export_module]
     pub mod advanced_math {
-        use rhai::FLOAT;
+        use quad_compat_rhai::FLOAT;
         pub fn get_mystic_number() -> FLOAT {
             42.0 as FLOAT
         }
@@ -42,11 +42,11 @@ fn one_fn_module_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 pub mod one_fn_and_const_module {
-    use rhai::plugin::*;
+    use quad_compat_rhai::plugin::*;
 
     #[export_module]
     pub mod advanced_math {
-        use rhai::FLOAT;
+        use quad_compat_rhai::FLOAT;
 
         pub const MYSTIC_NUMBER: FLOAT = 42.0 as FLOAT;
 
@@ -75,7 +75,7 @@ fn one_fn_and_const_module_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 pub mod raw_fn_str_module {
-    use rhai::plugin::*;
+    use quad_compat_rhai::plugin::*;
 
     #[export_module]
     pub mod host_io {
@@ -100,8 +100,8 @@ fn raw_fn_str_module_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 pub mod mut_opaque_ref_module {
-    use rhai::plugin::*;
-    use rhai::INT;
+    use quad_compat_rhai::plugin::*;
+    use quad_compat_rhai::INT;
 
     #[derive(Clone)]
     pub struct StatusMessage {
@@ -159,10 +159,10 @@ fn mut_opaque_ref_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 mod duplicate_fn_rename {
-    use rhai::plugin::*;
+    use quad_compat_rhai::plugin::*;
     #[export_module]
     pub mod my_adds {
-        use rhai::{FLOAT, INT};
+        use quad_compat_rhai::{FLOAT, INT};
 
         #[rhai_fn(name = "add")]
         pub fn add_float(f1: FLOAT, f2: FLOAT) -> FLOAT {
@@ -198,10 +198,10 @@ fn duplicate_fn_rename_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 mod multiple_fn_rename {
-    use rhai::plugin::*;
+    use quad_compat_rhai::plugin::*;
     #[export_module]
     pub mod my_adds {
-        use rhai::{FLOAT, INT};
+        use quad_compat_rhai::{FLOAT, INT};
 
         pub fn get_mystic_number() -> FLOAT {
             42.0
@@ -265,11 +265,11 @@ fn multiple_fn_rename_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 mod export_by_prefix {
-    use rhai::plugin::*;
+    use quad_compat_rhai::plugin::*;
 
     #[export_module(export_prefix = "foo_")]
     pub mod my_adds {
-        use rhai::{FLOAT, INT};
+        use quad_compat_rhai::{FLOAT, INT};
 
         #[rhai_fn(name = "foo_add_f")]
         pub fn foo_add1(f1: FLOAT, f2: FLOAT) -> FLOAT {
@@ -346,11 +346,11 @@ fn export_by_prefix_test() -> Result<(), Box<EvalAltResult>> {
 }
 
 mod export_all {
-    use rhai::plugin::*;
+    use quad_compat_rhai::plugin::*;
 
     #[export_module(export_all)]
     pub mod my_adds {
-        use rhai::{FLOAT, INT};
+        use quad_compat_rhai::{FLOAT, INT};
 
         #[rhai_fn(name = "foo_add_f")]
         pub fn add_float(f1: FLOAT, f2: FLOAT) -> FLOAT {

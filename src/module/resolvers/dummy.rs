@@ -7,8 +7,8 @@ use std::prelude::v1::*;
 /// # Example
 ///
 /// ```
-/// use rhai::{Engine, Module};
-/// use rhai::module_resolvers::DummyModuleResolver;
+/// use quad_compat_rhai::{Engine, Module};
+/// use quad_compat_rhai::module_resolvers::DummyModuleResolver;
 ///
 /// let resolver = DummyModuleResolver::new();
 /// let mut engine = Engine::new();
@@ -23,8 +23,8 @@ impl DummyModuleResolver {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, Module};
-    /// use rhai::module_resolvers::DummyModuleResolver;
+    /// use quad_compat_rhai::{Engine, Module};
+    /// use quad_compat_rhai::module_resolvers::DummyModuleResolver;
     ///
     /// let resolver = DummyModuleResolver::new();
     /// let mut engine = Engine::new();

@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_index"))]
-use rhai::{Array, Dynamic, Engine, EvalAltResult, INT};
+use quad_compat_rhai::{Array, Dynamic, Engine, EvalAltResult, INT};
 
 #[test]
 fn test_arrays() -> Result<(), Box<EvalAltResult>> {

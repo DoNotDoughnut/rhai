@@ -16,7 +16,7 @@ pub trait FuncArgs {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, Dynamic, FuncArgs, Scope};
+    /// use quad_compat_rhai::{Engine, Dynamic, FuncArgs, Scope};
     ///
     /// // A struct containing function arguments
     /// struct Options {

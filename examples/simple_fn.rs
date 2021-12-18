@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, INT};
 
 fn add(x: INT, y: INT) -> INT {
     x + y

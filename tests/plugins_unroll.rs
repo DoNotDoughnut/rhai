@@ -1,7 +1,7 @@
 #![cfg(not(any(feature = "no_index", feature = "no_module")))]
 
-use rhai::plugin::*;
-use rhai::{Engine, EvalAltResult, Module, INT};
+use quad_compat_rhai::plugin::*;
+use quad_compat_rhai::{Engine, EvalAltResult, Module, INT};
 
 pub fn add_generic<T: std::ops::Add<Output = T>>(x: T, y: T) -> T {
     x + y
@@ -16,7 +16,7 @@ macro_rules! generate_ops {
         pub mod $op_name {
             $(
                 pub mod $type_names {
-                    use rhai::plugin::*;
+                    use quad_compat_rhai::plugin::*;
                     use super::super::$op_fn;
                     #[export_fn]
                     pub fn op(x: $type_names, y: $type_names) -> $type_names {

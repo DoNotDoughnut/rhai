@@ -9,8 +9,8 @@ use std::prelude::v1::*;
 /// # Example
 ///
 /// ```
-/// use rhai::{Engine, Module};
-/// use rhai::module_resolvers::{StaticModuleResolver, ModuleResolversCollection};
+/// use quad_compat_rhai::{Engine, Module};
+/// use quad_compat_rhai::module_resolvers::{StaticModuleResolver, ModuleResolversCollection};
 ///
 /// let mut collection = ModuleResolversCollection::new();
 ///
@@ -28,8 +28,8 @@ impl ModuleResolversCollection {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, Module};
-    /// use rhai::module_resolvers::{StaticModuleResolver, ModuleResolversCollection};
+    /// use quad_compat_rhai::{Engine, Module};
+    /// use quad_compat_rhai::module_resolvers::{StaticModuleResolver, ModuleResolversCollection};
     ///
     /// let mut collection = ModuleResolversCollection::new();
     ///

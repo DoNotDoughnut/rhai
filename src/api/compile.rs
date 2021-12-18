@@ -12,7 +12,7 @@ impl Engine {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let engine = Engine::new();
     ///
@@ -43,7 +43,7 @@ impl Engine {
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # #[cfg(not(feature = "no_optimize"))]
     /// # {
-    /// use rhai::{Engine, Scope, OptimizationLevel};
+    /// use quad_compat_rhai::{Engine, Scope, OptimizationLevel};
     ///
     /// let mut engine = Engine::new();
     ///
@@ -171,7 +171,7 @@ impl Engine {
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # #[cfg(not(feature = "no_optimize"))]
     /// # {
-    /// use rhai::{Engine, Scope, OptimizationLevel};
+    /// use quad_compat_rhai::{Engine, Scope, OptimizationLevel};
     ///
     /// let mut engine = Engine::new();
     ///
@@ -241,7 +241,7 @@ impl Engine {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let engine = Engine::new();
     ///
@@ -267,7 +267,7 @@ impl Engine {
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # #[cfg(not(feature = "no_optimize"))]
     /// # {
-    /// use rhai::{Engine, Scope, OptimizationLevel};
+    /// use quad_compat_rhai::{Engine, Scope, OptimizationLevel};
     ///
     /// let mut engine = Engine::new();
     ///
@@ -334,7 +334,7 @@ impl Engine {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, Map};
+    /// use quad_compat_rhai::{Engine, Map};
     ///
     /// let engine = Engine::new();
     ///

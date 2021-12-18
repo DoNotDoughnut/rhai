@@ -16,7 +16,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 #[link(name = "libcmt")]
 extern {}
 
-use rhai::{Engine, INT};
+use quad_compat_rhai::{Engine, INT};
 
 #[start]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {

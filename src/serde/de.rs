@@ -59,8 +59,8 @@ impl<'de> DynamicDeserializer<'de> {
 /// # #[cfg(not(feature = "no_index"))]
 /// # #[cfg(not(feature = "no_object"))]
 /// # {
-/// use rhai::{Dynamic, Array, Map, INT};
-/// use rhai::serde::from_dynamic;
+/// use quad_compat_rhai::{Dynamic, Array, Map, INT};
+/// use quad_compat_rhai::serde::from_dynamic;
 /// use serde::Deserialize;
 ///
 /// #[derive(Debug, Deserialize, PartialEq)]

@@ -1,4 +1,4 @@
-use rhai::plugin::*;
+use quad_compat_rhai::plugin::*;
 
 struct NonClonable {
     a: f32,

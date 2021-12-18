@@ -25,7 +25,7 @@
 //! ## The Rust part
 //!
 //! ```no_run
-//! use rhai::{Engine, EvalAltResult};
+//! use quad_compat_rhai::{Engine, EvalAltResult};
 //!
 //! fn main() -> Result<(), Box<EvalAltResult>>
 //! {

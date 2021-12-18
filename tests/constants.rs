@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, ParseErrorType, Scope, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, ParseErrorType, Scope, INT};
 
 #[test]
 fn test_constant() -> Result<(), Box<EvalAltResult>> {

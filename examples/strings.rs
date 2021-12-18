@@ -1,6 +1,6 @@
 ///! This example registers a variety of functions that operate on strings.
 ///! Remember to use `ImmutableString` or `&str` instead of `String` as parameters.
-use rhai::{Engine, EvalAltResult, ImmutableString, Scope, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, ImmutableString, Scope, INT};
 use std::io::{stdin, stdout, Write};
 
 /// Trim whitespace from a string. The original string argument is changed.

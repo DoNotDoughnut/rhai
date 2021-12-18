@@ -10,8 +10,8 @@ use std::{collections::BTreeMap, ops::AddAssign};
 /// # Example
 ///
 /// ```
-/// use rhai::{Engine, Module};
-/// use rhai::module_resolvers::StaticModuleResolver;
+/// use quad_compat_rhai::{Engine, Module};
+/// use quad_compat_rhai::module_resolvers::StaticModuleResolver;
 ///
 /// let mut resolver = StaticModuleResolver::new();
 ///
@@ -31,8 +31,8 @@ impl StaticModuleResolver {
     /// # Example
     ///
     /// ```
-    /// use rhai::{Engine, Module};
-    /// use rhai::module_resolvers::StaticModuleResolver;
+    /// use quad_compat_rhai::{Engine, Module};
+    /// use quad_compat_rhai::module_resolvers::StaticModuleResolver;
     ///
     /// let mut resolver = StaticModuleResolver::new();
     ///

@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, INT};
 
 #[test]
 fn test_binary_ops() -> Result<(), Box<EvalAltResult>> {
@@ -37,7 +37,7 @@ fn test_binary_ops() -> Result<(), Box<EvalAltResult>> {
 
     #[cfg(not(feature = "no_float"))]
     {
-        use rhai::FLOAT;
+        use quad_compat_rhai::FLOAT;
 
         assert_eq!(engine.eval::<FLOAT>("10.0 + 4.0")?, 14.0);
         assert_eq!(engine.eval::<FLOAT>("10.0 - 4.0")?, 6.0);

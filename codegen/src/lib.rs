@@ -3,9 +3,9 @@
 //! # Export an Entire Rust Module to a Rhai `Module`
 //!
 //! ```
-//! use rhai::{EvalAltResult, FLOAT};
-//! use rhai::plugin::*;
-//! use rhai::module_resolvers::*;
+//! use quad_compat_rhai::{EvalAltResult, FLOAT};
+//! use quad_compat_rhai::plugin::*;
+//! use quad_compat_rhai::module_resolvers::*;
 //!
 //! #[export_module]
 //! mod advanced_math {
@@ -35,9 +35,9 @@
 //! # Register a Rust Function with a Rhai `Module`
 //!
 //! ```
-//! use rhai::{EvalAltResult, FLOAT, Module};
-//! use rhai::plugin::*;
-//! use rhai::module_resolvers::*;
+//! use quad_compat_rhai::{EvalAltResult, FLOAT, Module};
+//! use quad_compat_rhai::plugin::*;
+//! use quad_compat_rhai::module_resolvers::*;
 //!
 //! #[export_fn]
 //! fn distance_function(x1: FLOAT, y1: FLOAT, x2: FLOAT, y2: FLOAT) -> FLOAT {
@@ -65,9 +65,9 @@
 //! # Register a Plugin Function with an `Engine`
 //!
 //! ```
-//! use rhai::{EvalAltResult, FLOAT, Module};
-//! use rhai::plugin::*;
-//! use rhai::module_resolvers::*;
+//! use quad_compat_rhai::{EvalAltResult, FLOAT, Module};
+//! use quad_compat_rhai::plugin::*;
+//! use quad_compat_rhai::module_resolvers::*;
 //!
 //! #[export_fn]
 //! pub fn distance_function(x1: FLOAT, y1: FLOAT, x2: FLOAT, y2: FLOAT) -> FLOAT {
@@ -104,8 +104,8 @@ mod test;
 /// # Usage
 ///
 /// ```
-/// # use rhai::{Engine, EvalAltResult};
-/// use rhai::plugin::*;
+/// # use quad_compat_rhai::{Engine, EvalAltResult};
+/// use quad_compat_rhai::plugin::*;
 ///
 /// #[export_fn]
 /// fn my_plugin_function(x: i64) -> i64 {
@@ -156,8 +156,8 @@ pub fn export_fn(
 /// # Usage
 ///
 /// ```
-/// # use rhai::{Engine, Module, EvalAltResult};
-/// use rhai::plugin::*;
+/// # use quad_compat_rhai::{Engine, Module, EvalAltResult};
+/// use quad_compat_rhai::plugin::*;
 ///
 /// #[export_module]
 /// mod my_plugin_module {
@@ -199,8 +199,8 @@ pub fn export_module(
 /// # Usage
 ///
 /// ```
-/// # use rhai::{Engine, Module, EvalAltResult};
-/// use rhai::plugin::*;
+/// # use quad_compat_rhai::{Engine, Module, EvalAltResult};
+/// use quad_compat_rhai::plugin::*;
 ///
 /// #[export_module]
 /// mod my_plugin_module {
@@ -244,8 +244,8 @@ pub fn exported_module(module_path: proc_macro::TokenStream) -> proc_macro::Toke
 /// # Usage
 ///
 /// ```
-/// # use rhai::{Engine, Module, EvalAltResult};
-/// use rhai::plugin::*;
+/// # use quad_compat_rhai::{Engine, Module, EvalAltResult};
+/// use quad_compat_rhai::plugin::*;
 ///
 /// #[export_module]
 /// mod my_plugin_module {
@@ -280,8 +280,8 @@ pub fn combine_with_exported_module(args: proc_macro::TokenStream) -> proc_macro
 /// # Usage
 ///
 /// ```
-/// # use rhai::{Engine, EvalAltResult};
-/// use rhai::plugin::*;
+/// # use quad_compat_rhai::{Engine, EvalAltResult};
+/// use quad_compat_rhai::plugin::*;
 ///
 /// #[export_fn]
 /// fn my_plugin_function(x: i64) -> i64 {
@@ -315,8 +315,8 @@ pub fn register_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenS
 /// # Usage
 ///
 /// ```
-/// # use rhai::{Engine, EvalAltResult};
-/// use rhai::plugin::*;
+/// # use quad_compat_rhai::{Engine, EvalAltResult};
+/// use quad_compat_rhai::plugin::*;
 ///
 /// #[export_fn]
 /// fn my_plugin_function(x: i64) -> i64 {
@@ -364,8 +364,8 @@ pub fn set_exported_fn(args: proc_macro::TokenStream) -> proc_macro::TokenStream
 /// # Usage
 ///
 /// ```
-/// # use rhai::{Engine, EvalAltResult};
-/// use rhai::plugin::*;
+/// # use quad_compat_rhai::{Engine, EvalAltResult};
+/// use quad_compat_rhai::plugin::*;
 ///
 /// #[export_fn]
 /// fn my_plugin_function(x: i64) -> i64 {

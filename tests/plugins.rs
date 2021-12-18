@@ -1,20 +1,20 @@
 #![cfg(not(any(feature = "no_index", feature = "no_module")))]
 
-use rhai::plugin::*;
-use rhai::{Engine, EvalAltResult, INT};
+use quad_compat_rhai::plugin::*;
+use quad_compat_rhai::{Engine, EvalAltResult, INT};
 
 mod test {
-    use rhai::plugin::*;
+    use quad_compat_rhai::plugin::*;
 
     #[export_module]
     pub mod special_array_package {
-        use rhai::{Array, INT};
+        use quad_compat_rhai::{Array, INT};
 
         pub const MYSTIC_NUMBER: INT = 42;
 
         #[cfg(not(feature = "no_object"))]
         pub mod feature {
-            use rhai::{Array, Dynamic, EvalAltResult};
+            use quad_compat_rhai::{Array, Dynamic, EvalAltResult};
 
             #[rhai_fn(get = "foo", return_raw)]
             #[inline(always)]
@@ -118,7 +118,7 @@ fn test_plugins_package() -> Result<(), Box<EvalAltResult>> {
 fn test_plugins_parameters() -> Result<(), Box<EvalAltResult>> {
     #[export_module]
     mod rhai_std {
-        use rhai::*;
+        use quad_compat_rhai::*;
 
         pub fn noop(_: &str) {}
     }

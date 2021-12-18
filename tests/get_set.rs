@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_object"))]
 
-use rhai::{Engine, EvalAltResult, Scope, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, Scope, INT};
 
 #[test]
 fn test_get_set() -> Result<(), Box<EvalAltResult>> {

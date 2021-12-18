@@ -3,7 +3,7 @@
 ///! Test evaluating expressions
 extern crate test;
 
-use rhai::{Engine, OptimizationLevel};
+use quad_compat_rhai::{Engine, OptimizationLevel};
 use test::Bencher;
 
 #[bench]

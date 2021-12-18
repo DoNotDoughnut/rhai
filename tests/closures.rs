@@ -1,12 +1,12 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Engine, EvalAltResult, FnPtr, ParseErrorType, Scope, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, FnPtr, ParseErrorType, Scope, INT};
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::mem::take;
 use std::rc::Rc;
 
 #[cfg(not(feature = "no_object"))]
-use rhai::Map;
+use quad_compat_rhai::Map;
 
 #[test]
 fn test_fn_ptr_curry_call() -> Result<(), Box<EvalAltResult>> {

@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, Scope, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, Scope, INT};
 
 #[test]
 fn test_ops() -> Result<(), Box<EvalAltResult>> {

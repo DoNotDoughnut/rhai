@@ -38,8 +38,8 @@ impl DynamicSerializer {
 /// # #[cfg(not(feature = "no_object"))]
 /// # #[cfg(not(feature = "no_float"))]
 /// # {
-/// use rhai::{Dynamic, Array, Map, INT};
-/// use rhai::serde::to_dynamic;
+/// use quad_compat_rhai::{Dynamic, Array, Map, INT};
+/// use quad_compat_rhai::serde::to_dynamic;
 /// use serde::Serialize;
 ///
 /// #[derive(Debug, serde::Serialize, PartialEq)]

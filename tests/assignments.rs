@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, ParseErrorType, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, ParseErrorType, INT};
 
 #[test]
 fn test_assignments() -> Result<(), Box<EvalAltResult>> {

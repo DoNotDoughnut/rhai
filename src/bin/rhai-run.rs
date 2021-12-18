@@ -1,7 +1,7 @@
-use rhai::{Engine, EvalAltResult, Position};
+use quad_compat_rhai::{Engine, EvalAltResult, Position};
 
 #[cfg(not(feature = "no_optimize"))]
-use rhai::OptimizationLevel;
+use quad_compat_rhai::OptimizationLevel;
 
 use std::{env, fs::File, io::Read, path::Path, process::exit};
 

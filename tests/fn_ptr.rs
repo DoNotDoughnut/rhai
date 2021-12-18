@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, FnPtr, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, FnPtr, INT};
 
 #[test]
 fn test_fn_ptr() -> Result<(), Box<EvalAltResult>> {

@@ -22,7 +22,7 @@ use std::{
 /// # Example
 ///
 /// ```
-/// use rhai::ImmutableString;
+/// use quad_compat_rhai::ImmutableString;
 ///
 /// let s1: ImmutableString = "hello".into();
 ///
@@ -555,7 +555,7 @@ impl ImmutableString {
     /// # Example
     ///
     /// ```
-    /// use rhai::ImmutableString;
+    /// use quad_compat_rhai::ImmutableString;
     ///
     /// let s1: ImmutableString = "hello".into();
     /// let s2 = s1.clone();

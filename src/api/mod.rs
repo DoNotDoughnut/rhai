@@ -123,7 +123,7 @@ impl Engine {
     ///
     /// ```rust,should_panic
     /// # fn main() -> Result<(), rhai::ParseError> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -139,7 +139,7 @@ impl Engine {
     ///
     /// ```rust,should_panic
     /// # fn main() -> Result<(), rhai::ParseError> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -165,7 +165,7 @@ impl Engine {
     ///
     /// ```rust
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///

@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_function"))]
-use rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Func, FuncArgs, Scope, AST, INT};
+use quad_compat_rhai::{Dynamic, Engine, EvalAltResult, FnPtr, Func, FuncArgs, Scope, AST, INT};
 use std::{any::TypeId, iter::once};
 
 #[test]

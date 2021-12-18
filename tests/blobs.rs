@@ -1,5 +1,5 @@
 #![cfg(not(feature = "no_index"))]
-use rhai::{Blob, Engine, EvalAltResult, Scope, INT};
+use quad_compat_rhai::{Blob, Engine, EvalAltResult, Scope, INT};
 
 #[test]
 fn test_blobs() -> Result<(), Box<EvalAltResult>> {

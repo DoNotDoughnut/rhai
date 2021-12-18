@@ -1,7 +1,7 @@
-use rhai::{Engine, EvalAltResult, Module, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, Module, INT};
 
 #[cfg(not(feature = "no_float"))]
-use rhai::FLOAT;
+use quad_compat_rhai::FLOAT;
 
 #[cfg(feature = "decimal")]
 #[cfg(not(feature = "no_float"))]

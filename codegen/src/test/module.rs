@@ -703,14 +703,14 @@ mod generate_tests {
     fn one_constant_module_imports_preserved() {
         let input_tokens: TokenStream = quote! {
             pub mod one_constant {
-                pub use rhai::INT;
+                pub use quad_compat_rhai::INT;
                 pub const MYSTIC_NUMBER: INT = 42;
             }
         };
 
         let expected_tokens = quote! {
             pub mod one_constant {
-                pub use rhai::INT;
+                pub use quad_compat_rhai::INT;
                 pub const MYSTIC_NUMBER: INT = 42;
                 #[allow(unused_imports)]
                 use super::*;

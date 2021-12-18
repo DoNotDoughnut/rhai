@@ -3,7 +3,7 @@
 ///! Test evaluating with scope
 extern crate test;
 
-use rhai::{Engine, Module, OptimizationLevel};
+use quad_compat_rhai::{Engine, Module, OptimizationLevel};
 use test::Bencher;
 
 #[bench]

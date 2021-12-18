@@ -1,4 +1,4 @@
-use rhai::{
+use quad_compat_rhai::{
     Dynamic, Engine, EvalAltResult, ImmutableString, LexError, ParseErrorType, Position, Scope, INT,
 };
 

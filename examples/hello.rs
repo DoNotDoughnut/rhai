@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, INT};
 
 fn main() -> Result<(), Box<EvalAltResult>> {
     let engine = Engine::new();

@@ -38,7 +38,7 @@ impl Engine {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let mut engine = Engine::new();
     ///
@@ -88,7 +88,7 @@ impl Engine {
     ///
     /// ```
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-    /// use rhai::{Engine, Token};
+    /// use quad_compat_rhai::{Engine, Token};
     ///
     /// let mut engine = Engine::new();
     ///
@@ -148,7 +148,7 @@ impl Engine {
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # use std::sync::RwLock;
     /// # use std::sync::Arc;
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let result = Arc::new(RwLock::new(0_u64));
     /// let logger = result.clone();
@@ -191,7 +191,7 @@ impl Engine {
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # use std::sync::RwLock;
     /// # use std::sync::Arc;
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let result = Arc::new(RwLock::new(String::new()));
     ///
@@ -231,7 +231,7 @@ impl Engine {
     /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
     /// # use std::sync::RwLock;
     /// # use std::sync::Arc;
-    /// use rhai::Engine;
+    /// use quad_compat_rhai::Engine;
     ///
     /// let result = Arc::new(RwLock::new(String::new()));
     ///

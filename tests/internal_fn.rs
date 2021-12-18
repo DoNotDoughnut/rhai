@@ -1,6 +1,6 @@
 #![cfg(not(feature = "no_function"))]
 
-use rhai::{Engine, EvalAltResult, ParseErrorType, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, ParseErrorType, INT};
 
 #[test]
 fn test_internal_fn() -> Result<(), Box<EvalAltResult>> {

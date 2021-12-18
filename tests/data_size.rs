@@ -1,11 +1,11 @@
 #![cfg(not(feature = "unchecked"))]
-use rhai::{Engine, EvalAltResult, ParseErrorType};
+use quad_compat_rhai::{Engine, EvalAltResult, ParseErrorType};
 
 #[cfg(not(feature = "no_index"))]
-use rhai::Array;
+use quad_compat_rhai::Array;
 
 #[cfg(not(feature = "no_object"))]
-use rhai::Map;
+use quad_compat_rhai::Map;
 
 #[test]
 fn test_max_string_size() -> Result<(), Box<EvalAltResult>> {

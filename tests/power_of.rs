@@ -1,7 +1,7 @@
-use rhai::{Engine, EvalAltResult, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, INT};
 
 #[cfg(not(feature = "no_float"))]
-use rhai::FLOAT;
+use quad_compat_rhai::FLOAT;
 
 #[cfg(not(feature = "no_float"))]
 const EPSILON: FLOAT = 0.000_001;

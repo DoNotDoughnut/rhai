@@ -1,4 +1,4 @@
-use rhai::{Dynamic, Engine, EvalAltResult, ImmutableString, NativeCallContext, INT};
+use quad_compat_rhai::{Dynamic, Engine, EvalAltResult, ImmutableString, NativeCallContext, INT};
 use std::any::TypeId;
 
 #[cfg(not(feature = "no_module"))]

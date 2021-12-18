@@ -31,8 +31,8 @@ pub const RHAI_SCRIPT_EXTENSION: &str = "rhai";
 /// # Example
 ///
 /// ```
-/// use rhai::Engine;
-/// use rhai::module_resolvers::FileModuleResolver;
+/// use quad_compat_rhai::Engine;
+/// use quad_compat_rhai::module_resolvers::FileModuleResolver;
 ///
 /// // Create a new 'FileModuleResolver' loading scripts from the 'scripts' subdirectory
 /// // with file extension '.x'.
@@ -62,8 +62,8 @@ impl FileModuleResolver {
     /// # Example
     ///
     /// ```
-    /// use rhai::Engine;
-    /// use rhai::module_resolvers::FileModuleResolver;
+    /// use quad_compat_rhai::Engine;
+    /// use quad_compat_rhai::module_resolvers::FileModuleResolver;
     ///
     /// // Create a new 'FileModuleResolver' loading scripts from the current directory
     /// // with file extension '.rhai' (the default).
@@ -85,8 +85,8 @@ impl FileModuleResolver {
     /// # Example
     ///
     /// ```
-    /// use rhai::Engine;
-    /// use rhai::module_resolvers::FileModuleResolver;
+    /// use quad_compat_rhai::Engine;
+    /// use quad_compat_rhai::module_resolvers::FileModuleResolver;
     ///
     /// // Create a new 'FileModuleResolver' loading scripts from the 'scripts' subdirectory
     /// // with file extension '.rhai' (the default).
@@ -106,8 +106,8 @@ impl FileModuleResolver {
     /// # Example
     ///
     /// ```
-    /// use rhai::Engine;
-    /// use rhai::module_resolvers::FileModuleResolver;
+    /// use quad_compat_rhai::Engine;
+    /// use quad_compat_rhai::module_resolvers::FileModuleResolver;
     ///
     /// // Create a new 'FileModuleResolver' loading scripts with file extension '.rhai' (the default).
     /// let resolver = FileModuleResolver::new_with_extension("rhai");
@@ -131,8 +131,8 @@ impl FileModuleResolver {
     /// # Example
     ///
     /// ```
-    /// use rhai::Engine;
-    /// use rhai::module_resolvers::FileModuleResolver;
+    /// use quad_compat_rhai::Engine;
+    /// use quad_compat_rhai::module_resolvers::FileModuleResolver;
     ///
     /// // Create a new 'FileModuleResolver' loading scripts from the 'scripts' subdirectory
     /// // with file extension '.x'.

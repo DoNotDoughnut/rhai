@@ -956,7 +956,7 @@ impl<'x, 'px, 'pt> EvalContext<'_, 'x, 'px, '_, '_, '_, '_, 'pt> {
 ///
 /// ```
 /// # fn main() -> Result<(), Box<rhai::EvalAltResult>> {
-/// use rhai::Engine;
+/// use quad_compat_rhai::Engine;
 ///
 /// let engine = Engine::new();
 ///

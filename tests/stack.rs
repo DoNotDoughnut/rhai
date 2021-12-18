@@ -1,5 +1,5 @@
 #![cfg(not(feature = "unchecked"))]
-use rhai::{Engine, EvalAltResult, ParseErrorType, INT};
+use quad_compat_rhai::{Engine, EvalAltResult, ParseErrorType, INT};
 
 #[test]
 #[cfg(not(feature = "no_function"))]
